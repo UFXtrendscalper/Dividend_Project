@@ -1,0 +1,28 @@
+Note:: make sure you are on the wealthsimple dividends page
+Use google chrome
+
+<<< This function can be run in the browser console and will press the button n times>>>
+
+let count = 0;
+let selectedElement
+function clickButton() {
+    const button = document.querySelector('.bNTIcn');
+    if (button && count < 1) {
+        button.click();
+        count++;
+        setTimeout(clickButton, 1000); // 1 second delay
+    }
+    selectedElement = document.querySelector('div.sc-b8968c09-0.sc-627a97b9-0.dwSupe.kMnbrq');
+}
+
+keep running the click button 
+
+clickButton();
+
+
+---------------------------------------------------------------------------------------------
+
+save to a variable using this code
+
+let selectedElement = document.querySelector('div.sc-ccd8bc56-0.eqzkzy');
+
