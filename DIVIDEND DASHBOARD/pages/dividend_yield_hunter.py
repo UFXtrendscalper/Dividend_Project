@@ -7,15 +7,15 @@ import requests
 import yfinance as yf
 from prophet import Prophet
 import plotly.graph_objects as go
+import os
 
 #################### FUNCTIONS ####################
-def fetch_and_filter_dividends(selected_date):
+def fetch_and_filter_dividends(selected_date, api):
     # Calculate the date one day after today
     fetch_date = selected_date
     #  format the date to match "Year-mmonth-day"
     fetch_date = fetch_date.strftime('%Y-%m-%d')
 
-    api = 'I3RTEm6vso7yOXBhGcYSidwUhRHaSgWy'
     url = f'https://api.polygon.io/v3/reference/dividends?ex_dividend_date={fetch_date}&dividend_type=CD&order=asc&limit=1000&sort=ex_dividend_date&apiKey={api}'
 
     # make a request to the url 
@@ -96,6 +96,7 @@ def process_forecasted_data(forecast_df):
 TODAYS_DATE = date.today()
 MONEY_FORMAT = dash_table.FormatTemplate.money(2)
 DECIMAL_FORMAT = dash_table.FormatTemplate.Format(precision=2, symbol_suffix='%')
+POLYGON_API = os.environ.get('POLYGON_API_KEY')
 
 dash.register_page(__name__, path='/dividend_yield_hunter', name='Dividend Yield Hunter 🏹')
 
@@ -141,7 +142,7 @@ def update_output(clear_clicks, find_clicks, date):
 
         # convert the date to a datetime object and format it
         date = datetime.strptime(date, '%Y-%m-%d').date()
-        ticker_list, dataframe = fetch_and_filter_dividends(date)
+        ticker_list, dataframe = fetch_and_filter_dividends(date, POLYGON_API)
 
         buy_list = []
 

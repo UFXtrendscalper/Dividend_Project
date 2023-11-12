@@ -7,6 +7,7 @@ import pandas as pd
 import requests
 from prophet import Prophet
 from datetime import date, timedelta, datetime
+import os
 
 #################### FUNCTIONS ####################
 def create_indices_charts(): 
@@ -243,7 +244,7 @@ def create_table(ticker):
 #################### CONSTANTS ####################
 TICKERS = load_and_combine_tickers()
 TODAYS_DATE = date.today()
-API_KEY = 'I3RTEm6vso7yOXBhGcYSidwUhRHaSgWy'
+API_KEY = os.environ.get('POLYGON_API_KEY')
 MONEY_FORMAT = dash_table.FormatTemplate.money(2)
 
 
