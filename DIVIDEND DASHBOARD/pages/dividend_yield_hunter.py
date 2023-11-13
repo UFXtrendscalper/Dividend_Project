@@ -8,6 +8,9 @@ import yfinance as yf
 from prophet import Prophet
 import plotly.graph_objects as go
 import os
+from dotenv import load_dotenv
+
+load_dotenv('../.env')
 
 #################### FUNCTIONS ####################
 def fetch_and_filter_dividends(selected_date, api):
@@ -96,7 +99,7 @@ def process_forecasted_data(forecast_df):
 TODAYS_DATE = date.today()
 MONEY_FORMAT = dash_table.FormatTemplate.money(2)
 DECIMAL_FORMAT = dash_table.FormatTemplate.Format(precision=2, symbol_suffix='%')
-POLYGON_API = os.environ.get('POLYGON_API_KEY')
+POLYGON_API = os.environ.get('POLYGON_IO_API')
 
 dash.register_page(__name__, path='/dividend_yield_hunter', name='Dividend Yield Hunter 🏹')
 

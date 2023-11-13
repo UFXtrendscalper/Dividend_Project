@@ -8,6 +8,9 @@ import requests
 from prophet import Prophet
 from datetime import date, timedelta, datetime
 import os
+from dotenv import load_dotenv
+
+load_dotenv('../.env')
 
 #################### FUNCTIONS ####################
 def create_indices_charts(): 
@@ -244,7 +247,7 @@ def create_table(ticker):
 #################### CONSTANTS ####################
 TICKERS = load_and_combine_tickers()
 TODAYS_DATE = date.today()
-API_KEY = os.environ.get('POLYGON_API_KEY')
+API_KEY = os.environ.get('POLYGON_IO_API')
 MONEY_FORMAT = dash_table.FormatTemplate.money(2)
 
 
