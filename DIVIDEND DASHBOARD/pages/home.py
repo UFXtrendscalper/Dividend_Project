@@ -3,6 +3,7 @@ from dash import html, dcc, Input, Output, callback, dash_table
 import plotly.express as px
 import pandas as pd
 import datetime as datetime
+import numpy as np
 
 #################### CONSTANTS ####################
 MONEY_FORMAT = dash_table.FormatTemplate.money(2)
@@ -62,7 +63,7 @@ def create_line_chart(data):
     # Update layout
     fig.update_layout(hovermode='x unified', template='plotly_dark')
     fig.update_layout(hoverlabel=dict(font_size=16, font_family="Rockwell"))
-    fig.update_layout(title_x=0.5, xaxis_title='', yaxis_title='Dividends Paid')
+    fig.update_layout(title_x=0.5, xaxis_title='', yaxis_title='')
     fig.update_layout(height=400, width=800)
     fig.update_layout(font_size=16, font_family="Rockwell")
     fig.update_layout(title_font_family="Rockwell", title_font_size=24)
@@ -79,12 +80,132 @@ def create_bar_chart(df):
     # Create the bar chart
     fig = px.bar(df, x=df.index, y='Amount', title='Dividend Profits')
     # Update layout
-    fig.update_layout(template = 'plotly_dark', title_x=0.5, xaxis_title='', yaxis_title='Dividends Paid')
+    fig.update_layout(template = 'plotly_dark', title_x=0.5, xaxis_title='', yaxis_title='')
     fig.update_layout(height=400, width=800)
     fig.update_layout(font_size=16, font_family="Rockwell")
     fig.update_layout(title_font_family="Rockwell", title_font_size=24)
     # Update y-axes to include dollar sign
     fig.update_yaxes(tickprefix="$")
+    return fig
+
+def preprocess_data(df):
+    """
+    Preprocesses the closed trades dataframe by keeping specific columns,
+    changing NaN values to 0 in the 'Div. Earned' column, and calculating
+    the 'Amount' column.
+
+    Parameters:
+    df (DataFrame): The original dataframe of closed trades.
+
+    Returns:
+    DataFrame: The preprocessed dataframe.
+    """
+    # Keep specific columns
+    dataframe = df.copy()[['Date Closed', 'G/L ($)', 'Div. Earned']]
+
+    # Change NaN to 0 in the 'Div. Earned' column
+    dataframe['Div. Earned'] = dataframe['Div. Earned'].fillna(0)
+
+    # Calculate the 'Amount' column
+    dataframe['Amount'] = dataframe['G/L ($)'] - dataframe['Div. Earned']
+
+    # Drop the 'G/L ($)' and 'Div. Earned' columns and rename 'Date Closed'
+    dataframe = dataframe[['Date Closed', 'Amount']].rename(columns={'Date Closed': 'Date'})
+
+    return dataframe
+
+def load_and_preprocess_data(filepath):
+    """
+    Reads data from an Excel file and preprocesses it for analysis.
+    It reads data from different sheets and formats them.
+
+    Parameters:
+    filepath (str): Path to the Excel file containing the data.
+
+    Returns:
+    tuple: A tuple containing preprocessed dataframes.
+    """
+    # Read data from Excel file
+    closed_trades_df = pd.read_excel(filepath, sheet_name='closed_trades')
+    div_paid_2023_df = pd.read_excel(filepath, sheet_name='2023')
+    div_paid_2022_df = pd.read_excel(filepath, sheet_name='2022')
+    div_paid_2021_df = pd.read_excel(filepath, sheet_name='2021')
+
+    # Preprocess closed trades data
+    closed_trades_df = preprocess_data(closed_trades_df)
+
+    # Keep only Date and Amount columns for dividend data
+    div_paid_2023_df = div_paid_2023_df[['Date', 'Amount']]
+    div_paid_2022_df = div_paid_2022_df[['Date', 'Amount']]
+    div_paid_2021_df = div_paid_2021_df[['Date', 'Amount']]
+
+    # Concatenate the dividend dataframes
+    div_paid_df = pd.concat([div_paid_2023_df, div_paid_2022_df, div_paid_2021_df, closed_trades_df])
+
+    return div_paid_df
+
+def calculate_cumulative_growth(df):
+    """
+    Groups the dataframe by date, sums the amounts, and calculates the cumulative
+    growth.
+
+    Parameters:
+    df (DataFrame): The dataframe with dividend payments and closed trades.
+
+    Returns:
+    DataFrame: The dataframe with an additional column for cumulative growth.
+    """
+    # Group by date and sum the amounts
+    df = df.groupby('Date').sum()
+
+    # Calculate cumulative sum of the values
+    df['cumulative_growth'] = np.cumsum(df['Amount'])
+
+    # Round the values in the dataframe
+    df = df.round(2)
+
+    return df
+
+def plot_cumulative_growth(df):
+    """
+    Plots a line chart of cumulative growth over time.
+
+    Parameters:
+    df (DataFrame): The dataframe containing the date and cumulative growth.
+
+    Returns:
+    None: Displays the plot.
+    """
+    fig = px.line(df, x=df.index, y='cumulative_growth', 
+                  title='Cumulative Growth:<br> Including Closed Trades and Dividends Paid',
+                  template='plotly_dark')
+    fig.update_layout(hoverlabel=dict(font_size=16, font_family="Rockwell"))
+    fig.update_layout(title_x=0.5, xaxis_title='', yaxis_title='')
+    fig.update_layout(height=400, width=800)
+    fig.update_layout(font_size=16, font_family="Rockwell")
+    fig.update_layout(title_font_family="Rockwell", title_font_size=24)
+    fig.update_yaxes(tickprefix="$")
+    return fig
+
+def plot_yearly_dividends(df):
+    """
+    Plots a bar chart of yearly dividend payouts.
+
+    Parameters:
+    df (DataFrame): The dataframe containing the year and total dividends paid.
+
+    Returns:
+    None: Displays the plot.
+    """
+    fig = px.bar(df, y='Amount', title='Yearly Dividend Payouts:<br> Including Closed Trades and Dividends Paid',
+                 template='plotly_dark')
+    fig.update_layout(hoverlabel=dict(font_size=16, font_family="Rockwell"))
+    fig.update_layout(title_x=0.5, xaxis_title='', yaxis_title='')
+    fig.update_layout(height=400, width=800)
+    fig.update_layout(font_size=16, font_family="Rockwell")
+    fig.update_layout(title_font_family="Rockwell", title_font_size=24)
+    fig.update_yaxes(tickprefix="$")
+    fig.update_xaxes(tickmode='linear')
     return fig
 
 dash.register_page(__name__, path='/', name='Home 🤑')
@@ -94,6 +215,15 @@ div_profits_df = get_yr_div_profits(['2021', '2022', '2023'])
 cur_holdings_df = get_current_holdings()
 cur_dividends_paid_df = sum_dividends_by_month()
 
+filepath = './data/Dividend_Dashboard.xlsx'
+div_paid_df = load_and_preprocess_data(filepath)
+# Calculate cumulative growth
+cumulative_growth_df = calculate_cumulative_growth(div_paid_df)
+
+# Prepare and plot yearly dividends
+div_paid_yearly_df = cumulative_growth_df.groupby(pd.Grouper(freq='Y')).sum()
+div_paid_yearly_df.index = div_paid_yearly_df.index.year
+
 #################### PAGE LAYOUT ####################
 layout = html.Div(children=[
     html.Div(children=[
@@ -101,6 +231,10 @@ layout = html.Div(children=[
         html.Div(children=[
             dcc.Graph(figure=create_bar_chart(div_profits_df)),
             dcc.Graph(figure=create_line_chart(cur_dividends_paid_df))
+        ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row'}),
+        html.Div(children=[
+            dcc.Graph(figure = plot_cumulative_growth(cumulative_growth_df)),
+            dcc.Graph(figure = plot_yearly_dividends(div_paid_yearly_df)),
         ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row'}),
         html.Div(children=[
             html.Div([
