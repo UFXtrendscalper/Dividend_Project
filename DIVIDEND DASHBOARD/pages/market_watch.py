@@ -67,7 +67,7 @@ def create_indices_charts():
 def load_and_combine_tickers():
     # get the Ticker column from the dividend excel file
     dividend_tickers = pd.read_excel('data/Dividend_Dashboard.xlsx', sheet_name='current_holdings', usecols='G') 
-    tickers = ['CAD=X', 'GLD', 'SPLG', 'BTC-USD', 'ETH-USD']
+    tickers = ['CAD=X', 'EURUSD=X', 'GBPUSD=X', 'AUDUSD=X', 'NZDUSD=X', 'JPY=X', 'CHF=X', 'CL=F', 'GLD', 'SPLG', 'BTC-USD', 'ETH-USD']
     # convert divedend tickers to a list
     dividend_tickers = dividend_tickers['Ticker'].tolist()
     # sort the list
