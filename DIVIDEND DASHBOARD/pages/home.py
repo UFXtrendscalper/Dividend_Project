@@ -197,7 +197,7 @@ def plot_yearly_dividends(df):
     Returns:
     None: Displays the plot.
     """
-    fig = px.bar(df, y='Amount', title='Yearly Dividend Payouts:<br> Including Closed Trades and Dividends Paid',
+    fig = px.bar(df, y='Amount', title='Yearly Payouts:<br> Including Closed Trades and Dividends Paid',
                  template='plotly_dark')
     fig.update_layout(hoverlabel=dict(font_size=16, font_family="Rockwell"))
     fig.update_layout(title_x=0.5, xaxis_title='', yaxis_title='')
