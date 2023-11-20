@@ -115,7 +115,7 @@ def process_forecasted_data(forecast_df):
     df['lower_band'] = df['yhat_lower'].rolling(window=7).mean()
     return df
 
-def plotly_visualize_forecast(symbol, data, forcast_processed, width=1400, height=800):
+def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, height=890):
     # todo: add a doc string
     #  get timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d @ %H:%M:%S")
@@ -261,19 +261,26 @@ layout = html.Div(children=[
         ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%'}),
         html.Hr(style={'color': 'white'}),
         html.Div([
-            html.H4('Select Ticker:', style={'paddingLeft': '25px'}),
-            dcc.Dropdown(id='ticker_dropdown', 
-                         options=[{'label': 'USD/CAD', 'value': ticker} if ticker == 'CAD=X' else {'label': ticker, 'value': ticker} for ticker in TICKERS],
-                         value='CAD=X', 
-                         clearable=False, 
-                         style={'width': '32%', 'paddingLeft': '25px', 'display': 'inline-block'})
-        ]),
-        html.Div(children=[
-            dcc.Graph( id='ticker_chart', figure=process_chart_pipeline('CAD=X')),
-        ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%', 'marginBottom': '10px'}),
-        html.Div(id='div_table', children=[
-            
-        ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%'}),
+
+
+            html.Div([
+                html.H4('Select Ticker:', style={'width': '100%'}),
+                dcc.Dropdown(id='ticker_dropdown', 
+                            options=[{'label': 'USD/CAD', 'value': ticker} if ticker == 'CAD=X' else {'label': ticker, 'value': ticker} for ticker in TICKERS],
+                            value='CAD=X', 
+                            clearable=False
+                            )
+            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '5px 40px 5px 40px', 'display': 'inline-block'}),
+            html.Div(children=[
+                dcc.Graph( id='ticker_chart', figure=process_chart_pipeline('CAD=X')),
+                html.Div(id='div_table', children=[
+                
+                ]),
+            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%', 'marginBottom': '10px'}),
+        
+
+        ], style={'width': '100%', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'left', 'alignItems': 'left', 'flexDirection': 'row'}),
+        
         dcc.Interval(
             id='interval-component',
             interval=15*60*1000, # in milliseconds = 30 minutes
