@@ -15,10 +15,14 @@ load_dotenv('.env')
 #################### FUNCTIONS ####################
 def create_indices_charts(): 
     # end def    # Download the data from yahoo finance
-    tickers = ['^VIX', '^GSPC', '^IXIC', 'GLD']
-    ticker_names = ['VIX Volatility Index', 'S & P 500 Index', 'NASDAQ Index', 'Gold ETF']
-
+    tickers = ['^VIX', '^GSPC', 'CL=F', 'GC=F']
+    
     data = yf.download(tickers, period='1y', interval='1d', group_by='ticker', rounding=True)
+
+    ticker_names = []
+    for i, ticker in enumerate(tickers):
+        names = ['VIX Volatility Index: $', 'S&P 500 Index: $', 'Crude Oil: $', 'Gold: $']
+        ticker_names.append(names[i]+str(data[ticker].Close[-1]))
 
     # Calculate the average close price for each index
     avg_prices = {ticker: data[ticker]['Close'].mean() for ticker in tickers}
