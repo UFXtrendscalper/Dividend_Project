@@ -10,7 +10,7 @@ from datetime import date, timedelta, datetime
 import os
 from dotenv import load_dotenv
 
-load_dotenv('../.env')
+load_dotenv('.env')
 
 #################### FUNCTIONS ####################
 def create_indices_charts(): 
@@ -119,9 +119,11 @@ def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, heigh
     # todo: add a doc string
     #  get timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d @ %H:%M:%S")
-    date_buttons = [{'count': 9, 'label': '6M', 'step': "month", 'stepmode': "todate"},
+    date_buttons = [{'count': 15, 'label': '1Y', 'step': "month", 'stepmode': "todate"},
+                    {'count': 9, 'label': '6M', 'step': "month", 'stepmode': "todate"},
                     {'count': 6, 'label': '3M', 'step': "month", 'stepmode': "todate"},
-                    {'count': 4, 'label': '1M', 'step': "month", 'stepmode': "todate"}]
+                    {'count': 4, 'label': '1M', 'step': "month", 'stepmode': "todate"}, 
+                    {'step': "all"}]
     # create the plotly chart
     fig = go.Figure()
     fig.add_trace(go.Candlestick(x=data.index, open=data.Open, high=data.High, low=data.Low, close=data.Close, name='Candlestick', increasing_line_color='#F6FEFF', decreasing_line_color='#1CBDFB'))
@@ -162,6 +164,8 @@ def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, heigh
     return fig
 
 def process_chart_pipeline(symbol):
+    # todo add an if statement for forex pairs to use alphavantage api  
+    
     data = get_data(symbol)
     # get date 2 years ago
     two_years_ago = TODAYS_DATE - timedelta(days=730)
@@ -205,7 +209,7 @@ def fetch_dividend_data(ticker, api_key):
 
 def create_table(ticker):
     try:
-        table_df = fetch_dividend_data(ticker,API_KEY)
+        table_df = fetch_dividend_data(ticker, POLYGON_API_KEY)
     except:
         table_df = pd.DataFrame()
     return dash_table.DataTable(
@@ -247,7 +251,8 @@ def create_table(ticker):
 #################### CONSTANTS ####################
 TICKERS = load_and_combine_tickers()
 TODAYS_DATE = date.today()
-API_KEY = os.environ.get('POLYGON_IO_API')
+POLYGON_API_KEY = os.environ.get('POLYGON_IO_API')
+ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_CO_API')
 MONEY_FORMAT = dash_table.FormatTemplate.money(2)
 
 
@@ -270,13 +275,13 @@ layout = html.Div(children=[
                             value='CAD=X', 
                             clearable=False
                             )
-            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '5px 40px 5px 40px', 'display': 'inline-block'}),
+            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
             html.Div(children=[
                 dcc.Graph( id='ticker_chart', figure=process_chart_pipeline('CAD=X')),
                 html.Div(id='div_table', children=[
                 
                 ]),
-            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%', 'marginBottom': '10px'}),
+            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%', 'marginBottom': '10px', 'padding' : '10px'}),
         
 
         ], style={'width': '100%', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'left', 'alignItems': 'left', 'flexDirection': 'row'}),
