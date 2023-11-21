@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 import os
 from dotenv import load_dotenv
 
-load_dotenv('../.env')
+load_dotenv('.env')
 
 #################### FUNCTIONS ####################
 def fetch_and_filter_dividends(selected_date, api):
