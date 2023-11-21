@@ -117,6 +117,10 @@ def process_forecasted_data(forecast_df):
 
 def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, height=890):
     # todo: add a doc string
+
+    # check if symbol is in the ticker dictionary
+    if symbol in TICKER_DICT:
+        symbol = TICKER_DICT[symbol]
     #  get timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d @ %H:%M:%S")
     date_buttons = [{'count': 15, 'label': '1Y', 'step': "month", 'stepmode': "todate"},
@@ -250,6 +254,7 @@ def create_table(ticker):
 
 #################### CONSTANTS ####################
 TICKERS = load_and_combine_tickers()
+TICKER_DICT = {'CAD=X':'USD/CAD', 'EURUSD=X':'EUR/USD', 'GBPUSD=X':'GBP/USD', 'AUDUSD=X':'AUD/USD', 'NZDUSD=X':'NZD/USD', 'JPY=X':'USD/JPY', 'CHF=X':'USD/CHF', 'CL=F':'Crude Oil', 'GLD':'Gold ETF', 'SPLG':'S&P 500 ETF', 'BTC-USD':'Bitcoin', 'ETH-USD':'Ethereum'}
 TODAYS_DATE = date.today()
 POLYGON_API_KEY = os.environ.get('POLYGON_IO_API')
 ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_CO_API')
@@ -271,7 +276,7 @@ layout = html.Div(children=[
             html.Div([
                 html.H4('Select Ticker:', style={'width': '100%'}),
                 dcc.Dropdown(id='ticker_dropdown', 
-                            options=[{'label': 'USD/CAD', 'value': ticker} if ticker == 'CAD=X' else {'label': ticker, 'value': ticker} for ticker in TICKERS],
+                            options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
                             value='CAD=X', 
                             clearable=False
                             )
