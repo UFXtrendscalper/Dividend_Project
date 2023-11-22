@@ -68,16 +68,26 @@ def create_indices_charts():
     # Show figure
     return fig
 
-def load_and_combine_tickers():
+def load_and_combine_tickers(MT4_TICKERS, ETF_TICKERS):
     # get the Ticker column from the dividend excel file
     dividend_tickers = pd.read_excel('data/Dividend_Dashboard.xlsx', sheet_name='current_holdings', usecols='G') 
-    tickers = ['CAD=X', 'EURUSD=X', 'GBPUSD=X', 'AUDUSD=X', 'NZDUSD=X', 'JPY=X', 'CHF=X', 'CL=F', 'GLD', 'SPLG', 'BTC-USD', 'ETH-USD']
     # convert divedend tickers to a list
     dividend_tickers = dividend_tickers['Ticker'].tolist()
     # sort the list
     dividend_tickers.sort()
-    tickers = tickers + dividend_tickers
+    tickers = ETF_TICKERS + MT4_TICKERS + dividend_tickers
     return tickers
+
+# get data from mt4 csv files
+def get_mt4_data(symbol, period='60'):
+    # read in a csv file
+    path = r'C:\\Users\sean7\AppData\\Roaming\\MetaQuotes\\Terminal\\0BB29DBF61C9F39836A4ED9CF1A954C9\\MQL4\\Files\\'
+    period = period # 1440 = 1 day, 60 = 1 hour
+    filename = f'{symbol}_{period}.csv'
+    # create column names
+    col_names = ['Date', 'Open', 'High', 'Low', 'Close']
+    _df = pd.read_csv(path+filename, index_col=0, parse_dates=True, delimiter=';', names=col_names)
+    return _df
 
 # get the data from yahoo finance
 def get_data(symbol):
@@ -99,12 +109,16 @@ def forcasting_preparation(df):
     return df[['Date', 'Close']]
         
 # use prophet to forecast the data
-def forecast_data(data):
+def forecast_data(data, freq='D'):
     # todo: add a doc string
+    '''Notes for freq Parameter::
+    Can use 'D' for days and 'H' for hours and 'W' for weeks 
+    When using 'W' for weeks, the generated future data points will always fall on the start of the week, regardless of the start date in the history.
+    The 'W' frequency will default to generating dates that fall on a Sunday. However, you can specify a different day of the week by using 'W-MON', 'W-TUE', 'W-WED', etc., to have the weeks start on Monday, Tuesday, Wednesday, and so on. This allows for more flexibility in aligning the generated future data points with the specific weekly cycle of your dataset.'''
     data = data.rename(columns={'Date': 'ds', 'Close': 'y'})
     model = Prophet()
     model.fit(data)
-    future = model.make_future_dataframe(periods=90, freq='D')
+    future = model.make_future_dataframe(periods=90, freq=freq)
     forecast = model.predict(future)
     return forecast
 
@@ -119,7 +133,7 @@ def process_forecasted_data(forecast_df):
     df['lower_band'] = df['yhat_lower'].rolling(window=7).mean()
     return df
 
-def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, height=890):
+def plotly_visualize_forecast(symbol, timeframe, data, forcast_processed, width=1500, height=890):
     # todo: add a doc string
 
     # check if symbol is in the ticker dictionary
@@ -127,28 +141,35 @@ def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, heigh
         symbol = TICKER_DICT[symbol]
     #  get timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d @ %H:%M:%S")
-    date_buttons = [{'count': 15, 'label': '1Y', 'step': "month", 'stepmode': "todate"},
-                    {'count': 9, 'label': '6M', 'step': "month", 'stepmode': "todate"},
-                    {'count': 6, 'label': '3M', 'step': "month", 'stepmode': "todate"},
-                    {'count': 4, 'label': '1M', 'step': "month", 'stepmode': "todate"}, 
-                    {'step': "all"}]
+
+    # create the date buttons
+    if timeframe == 'Daily':
+        date_buttons = [{'count': 15, 'label': '1Y', 'step': "month", 'stepmode': "todate"},
+                        {'count': 9, 'label': '6M', 'step': "month", 'stepmode': "todate"},
+                        {'count': 6, 'label': '3M', 'step': "month", 'stepmode': "todate"},
+                        {'count': 4, 'label': '1M', 'step': "month", 'stepmode': "todate"}, 
+                        {'step': "all"}]
     # create the plotly chart
     fig = go.Figure()
     fig.add_trace(go.Candlestick(x=data.index, open=data.Open, high=data.High, low=data.Low, close=data.Close, name='Candlestick', increasing_line_color='#F6FEFF', decreasing_line_color='#1CBDFB'))
     
-    # update the layout of the chart with the buttons and timestamp along with some kwargs
-    fig.update_layout(  
-        {'xaxis':
-            {'rangeselector': {'buttons': date_buttons, 
-                                'bgcolor': '#444654', 
-                                'activecolor': '#1E82CD',
-                                'bordercolor': '#444654',
-                                'font': {'color': 'white'}}
-            }
-        },
-            width=width, height=height, xaxis_rangeslider_visible=False, 
-            paper_bgcolor='#202123', plot_bgcolor='#202123', font=dict(color='white', size=12),
-            font_size=14, font_family="Rockwell", title_font_family="Rockwell", title_font_size=24
+    if timeframe == 'Daily':
+        # update the layout of the chart with the buttons
+        fig.update_layout(  
+            {'xaxis':
+                {'rangeselector': {'buttons': date_buttons, 
+                                    'bgcolor': '#444654', 
+                                    'activecolor': '#1E82CD',
+                                    'bordercolor': '#444654',
+                                    'font': {'color': 'white'}}
+                }
+            },
+        )
+
+    fig.update_layout(
+        width=width, height=height, xaxis_rangeslider_visible=False, 
+        paper_bgcolor='#202123', plot_bgcolor='#202123', font=dict(color='white', size=12),
+        font_size=14, font_family="Rockwell", title_font_family="Rockwell", title_font_size=24
     )
     
     #  update the layout of the chart with the title and axis labels
@@ -158,8 +179,8 @@ def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, heigh
     )
 
     fig.update_layout( 
-        {'title': {'text':f'{symbol} Price Chart', 'x': 0.5, 'y': 0.95}},
-        yaxis=dict(title='Price', gridcolor='#444654'), xaxis=dict(gridcolor='#444654')
+        {'title': {'text':f'{symbol} {timeframe} Chart', 'x': 0.5, 'y': 0.95}},
+        yaxis=dict(title='', gridcolor='#444654'), xaxis=dict(gridcolor='#444654')
     )
     # Update y-axes to include dollar sign
     fig.update_yaxes(tickprefix="$")
@@ -171,20 +192,59 @@ def plotly_visualize_forecast(symbol, data, forcast_processed, width=1500, heigh
     fig.add_trace(go.Scatter(x=forcast_processed.ds, y=forcast_processed.lower_band, line=dict(color='#1E82CD', width=2), name='lower_band'))
     return fig
 
-def process_chart_pipeline(symbol):
+def process_chart_pipeline(symbol, show_hourly_chart=False):
     # todo add an if statement for forex pairs to use alphavantage api  
     
-    data = get_data(symbol)
-    # get date 2 years ago
-    two_years_ago = TODAYS_DATE - timedelta(days=730)
-    data = splice_data(data, two_years_ago)
-    forcasting_prep = forcasting_preparation(data)
-    forecast = forecast_data(forcasting_prep)
-    processed_forecast = process_forecasted_data(forecast)
+    if symbol in MT4_SYMBOLS:
+        if show_hourly_chart:
+            # Dictionary to store dataframes
+            hourly_dataframes = {}
+            hourly_dataframes[symbol] = {
+                'symbol_name': symbol,
+                'timeframe': '1 Hour',
+                'freq': 'H',
+                'df': get_mt4_data(symbol, period='60')
+            }
+            timeframe = hourly_dataframes[symbol]['timeframe']
+            freq = hourly_dataframes[symbol]['freq']
+            original_data = hourly_dataframes[symbol]['df'].copy()
+            
+        else:   
+            daily_dataframes = {}
+            daily_dataframes[symbol] = {
+                'symbol_name': symbol,
+                'timeframe': 'Daily',
+                'freq': 'D',
+                'df': get_mt4_data(symbol, period='1440')
+            }
+            timeframe = daily_dataframes[symbol]['timeframe']
+            freq = daily_dataframes[symbol]['freq']
+            original_data = daily_dataframes[symbol]['df'].copy()
 
-    # visulize the data 
-    fig = plotly_visualize_forecast(symbol, data, processed_forecast)
-    return fig
+        # work through the process
+        data_copy = original_data.copy()[['Close']]
+        forecasting_prep = forcasting_preparation(data_copy)
+        forecasted_data = forecast_data(forecasting_prep, freq=freq)
+        processed_forecast = process_forecasted_data(forecasted_data)
+        # set the index to the date column
+        processed_forecast.index = processed_forecast['ds']
+        # Filter out weekends
+        original_data = original_data[original_data.index.dayofweek < 5]
+        processed_forecast = processed_forecast[processed_forecast.index.dayofweek < 5]
+        # use plotly_visualize_forecast to plot the data
+        fig = plotly_visualize_forecast(symbol, timeframe, original_data, processed_forecast)
+        return fig
+    else:
+        data = get_data(symbol)
+        # get date 2 years ago
+        two_years_ago = TODAYS_DATE - timedelta(days=730)
+        data = splice_data(data, two_years_ago)
+        forcasting_prep = forcasting_preparation(data)
+        forecast = forecast_data(forcasting_prep)
+        processed_forecast = process_forecasted_data(forecast)
+        # visulize the data 
+        fig = plotly_visualize_forecast(symbol, 'Daily', data, processed_forecast)
+        return fig
 
 def fetch_dividend_data(ticker, api_key):
     """
@@ -257,8 +317,10 @@ def create_table(ticker):
             )
 
 #################### CONSTANTS ####################
-TICKERS = load_and_combine_tickers()
-TICKER_DICT = {'CAD=X':'USD/CAD', 'EURUSD=X':'EUR/USD', 'GBPUSD=X':'GBP/USD', 'AUDUSD=X':'AUD/USD', 'NZDUSD=X':'NZD/USD', 'JPY=X':'USD/JPY', 'CHF=X':'USD/CHF', 'CL=F':'Crude Oil', 'GLD':'Gold ETF', 'SPLG':'S&P 500 ETF', 'BTC-USD':'Bitcoin', 'ETH-USD':'Ethereum'}
+MT4_SYMBOLS = ["USDCAD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD", "GBPUSD", "EURUSD", "OILUSe", "XAUUSD", "S&P500e", "BTCUSD", "ETHUSD"] 
+ETF_SYMBOLS = ['GLD', 'SPLG']
+TICKERS = load_and_combine_tickers(MT4_SYMBOLS, ETF_SYMBOLS)
+TICKER_DICT = {'USDCAD':'USD/CAD', 'USDJPY':'USD/JPY', 'USDCHF':'USD/CHF', 'EURUSD':'EUR/USD', 'GBPUSD':'GBP/USD', 'AUDUSD':'AUD/USD', 'NZDUSD':'NZD/USD', 'OILUSe':'Crude Oil', 'XAUUSD':'Gold Futures', 'GLD':'Gold ETF', 'S&P500e':'S&P 500 Futures', 'SPLG':'S&P 500 ETF', 'BTCUSD':'Bitcoin', 'ETHUSD':'Ethereum'}
 TODAYS_DATE = date.today()
 POLYGON_API_KEY = os.environ.get('POLYGON_IO_API')
 ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_CO_API')
@@ -281,12 +343,12 @@ layout = html.Div(children=[
                 html.H4('Select Ticker:', style={'width': '100%'}),
                 dcc.Dropdown(id='ticker_dropdown', 
                             options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
-                            value='CAD=X', 
+                            value='USDCAD', 
                             clearable=False
                             )
             ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
             html.Div(children=[
-                dcc.Graph( id='ticker_chart', figure=process_chart_pipeline('CAD=X')),
+                dcc.Graph( id='ticker_chart', figure=process_chart_pipeline('USDCAD')),
                 html.Div(id='div_table', children=[
                 
                 ]),
