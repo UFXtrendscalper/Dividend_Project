@@ -340,6 +340,12 @@ layout = html.Div(children=[
 
 
             html.Div([
+                html.H4('Select TimeFrame:', style={'width': '100%'}),
+                dcc.Dropdown(id='timeframe_dropdown', 
+                            options=[{'label': 'Daily', 'value': 'Daily'}, {'label': 'Hourly', 'value': 'Hourly'}],
+                            value='Daily', 
+                            clearable=False
+                            ),
                 html.H4('Select Ticker:', style={'width': '100%'}),
                 dcc.Dropdown(id='ticker_dropdown', 
                             options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
@@ -359,7 +365,7 @@ layout = html.Div(children=[
         
         dcc.Interval(
             id='interval-component',
-            interval=15*60*1000, # in milliseconds = 30 minutes
+            interval=15*60*1000, # in milliseconds = will update every 15 minutes
             n_intervals=0
         )
         
@@ -369,13 +375,17 @@ layout = html.Div(children=[
 @callback(
     Output('ticker_chart', 'figure'), 
     Output('div_table', 'children'),
+    Input('timeframe_dropdown', 'value'),
     Input('ticker_dropdown', 'value'),
     Input('interval-component', 'n_intervals'),
     # do not run the callback if the ticker is not changed
     prevent_initial_call=True
     )
-def update_chart(ticker, n):
-    fig = process_chart_pipeline(ticker)
+def update_chart(timeframe, ticker, n):
+    if timeframe == 'Hourly':
+        fig = process_chart_pipeline(ticker, show_hourly_chart=True)
+    else:
+        fig = process_chart_pipeline(ticker)
     table = create_table(ticker)
     return fig, table
 
