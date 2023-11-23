@@ -26,10 +26,17 @@ def fetch_and_filter_dividends(selected_date, api):
     # convert the response to json
     data = response.json()
 
-    # create a dataframe from the json data
-    df = pd.DataFrame(data['results'])
-    # create a list from the dataframe ticker column
-    ticker_list = df['ticker'].tolist()
+    # check if data is empty
+    if data['results']:
+        # create a dataframe from the json data
+        df = pd.DataFrame(data['results'])
+        # create a list from the dataframe ticker column
+        ticker_list = df['ticker'].tolist()
+    else:
+        ticker_list = None
+        df3 = pd.DataFrame()
+        return ticker_list, df3
+    
     # get close prices for the tickers
     ticker_prices = yf.download(ticker_list, period='1d', interval='1d', prepost=True, rounding=True)['Close']
     # grap only the last row of the dataframe if there are multiple rows
@@ -147,49 +154,57 @@ def update_output(clear_clicks, find_clicks, date):
         date = datetime.strptime(date, '%Y-%m-%d').date()
         ticker_list, dataframe = fetch_and_filter_dividends(date, POLYGON_API)
 
-        buy_list = []
+        # If there are no dividends tomorrow, do not update the graphs
+        if ticker_list:
+            buy_list = []
 
-        for symbol in ticker_list:
-            data = get_data(symbol)
-            # get date 2 years ago
-            two_years_ago = TODAYS_DATE - timedelta(days=730)
-            data = splice_data(data, two_years_ago)
-            forcasting_prep = forcasting_preparation(data)
-            forecast = forecast_data(forcasting_prep)
-            processed_forecast = process_forecasted_data(forecast)
-            # check if price is less then the lower band
-            date = data.index[-1].strftime('%Y-%m-%d')
-            price = data.Close[-1]
-            lower_band = processed_forecast.query(f'ds == "{date}"')['lower_band'].values[0]
-            # # check if the price is below the lower band
-            if price < lower_band:
-                # visualize the data
-                # plotly_visualize_forecast(symbol, data, processed_forecast)
-                # append symbol to the short list
-                buy_list.append([symbol, data, processed_forecast])
+            for symbol in ticker_list:
+                data = get_data(symbol)
+                # get date 2 years ago
+                two_years_ago = TODAYS_DATE - timedelta(days=730)
+                data = splice_data(data, two_years_ago)
+                forcasting_prep = forcasting_preparation(data)
+                forecast = forecast_data(forcasting_prep)
+                processed_forecast = process_forecasted_data(forecast)
+                # check if price is less then the lower band
+                date = data.index[-1].strftime('%Y-%m-%d')
+                price = data.Close[-1]
+                lower_band = processed_forecast.query(f'ds == "{date}"')['lower_band'].values[0]
+                # # check if the price is below the lower band
+                if price < lower_band:
+                    # visualize the data
+                    # plotly_visualize_forecast(symbol, data, processed_forecast)
+                    # append symbol to the short list
+                    buy_list.append([symbol, data, processed_forecast])
 
-        buy_df = dataframe[['cash_amount','ex_dividend_date','frequency','pay_date','ticker','close_Prices','percentage','yearly_percentage']]
-        # extract the symbols from the buy_list
-        symbols = [sub_list[0] for sub_list in buy_list]
-        # filter the buy_df for the symbols in the buy_list
-        buy_df = buy_df[buy_df['ticker'].isin(symbols)]
-        # create a column that contains the number of shares to buy based on 100$ investment
-        buy_df['num_shares_100'] = 100 / buy_df['close_Prices']
-        # convert to integer
-        buy_df['num_shares_100'] = buy_df['num_shares_100'].astype(int)
-        buy_df['purchase_cost'] = buy_df['num_shares_100'] * buy_df['close_Prices']
-        buy_df['next_div_pay'] = buy_df['num_shares_100'] * buy_df['cash_amount']
-        buy_df['yr_div_pay'] = buy_df['next_div_pay'] * buy_df['frequency']    
+            # if there are no stocks to buy return a message
+            if not buy_list:
+                components_to_return = html.H3('There are no stocks to buy tomorrow', style={'textAlign': 'center', 'margin': 10, 'padding': 0, 'color': 'white'}), find_clicks
+                return components_to_return, find_clicks
+            
+            buy_df = dataframe[['cash_amount','ex_dividend_date','frequency','pay_date','ticker','close_Prices','percentage','yearly_percentage']]
+            # extract the symbols from the buy_list
+            symbols = [sub_list[0] for sub_list in buy_list]
+            # filter the buy_df for the symbols in the buy_list
+            buy_df = buy_df[buy_df['ticker'].isin(symbols)]
+            # create a column that contains the number of shares to buy based on 100$ investment
+            buy_df['num_shares_100'] = 100 / buy_df['close_Prices']
+            # convert to integer
+            buy_df['num_shares_100'] = buy_df['num_shares_100'].astype(int)
+            buy_df['purchase_cost'] = buy_df['num_shares_100'] * buy_df['close_Prices']
+            buy_df['next_div_pay'] = buy_df['num_shares_100'] * buy_df['cash_amount']
+            buy_df['yr_div_pay'] = buy_df['next_div_pay'] * buy_df['frequency']    
 
-        # Generate graphs for each item in the list
-        graphs = [create_chart(symbol) for symbol in buy_list]
-        # generate the yield table 
-        yield_table = create_table(buy_df)
-        
-        # Now append the yield_table_component to your graphs list or any other container list
-        # that you are using to return the layout components
-        components_to_return = graphs + [yield_table]
-        
+            # Generate graphs for each item in the list
+            graphs = [create_chart(symbol) for symbol in buy_list]
+            # generate the yield table 
+            yield_table = create_table(buy_df)
+            
+            # Now append the yield_table_component to your graphs list or any other container list
+            # that you are using to return the layout components
+            components_to_return = graphs + [yield_table]
+        else:
+            components_to_return = html.H3('There are no dividends tomorrow', style={'textAlign': 'center', 'margin': 10, 'padding': 0, 'color': 'white'})
         # Make sure to return the correct number of outputs
         return components_to_return, find_clicks
     
