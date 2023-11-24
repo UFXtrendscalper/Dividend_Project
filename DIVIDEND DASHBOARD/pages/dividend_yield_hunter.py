@@ -179,7 +179,7 @@ def update_output(clear_clicks, find_clicks, date):
 
             # if there are no stocks to buy return a message
             if not buy_list:
-                components_to_return = html.H3('There are no stocks to buy tomorrow', style={'textAlign': 'center', 'margin': 10, 'padding': 0, 'color': 'white'}), find_clicks
+                components_to_return = html.H3('There are no dividends opportunities', style={'textAlign': 'center', 'margin': 10, 'padding': 0, 'color': 'white'}), find_clicks
                 return components_to_return, find_clicks
             
             buy_df = dataframe[['cash_amount','ex_dividend_date','frequency','pay_date','ticker','close_Prices','percentage','yearly_percentage']]
@@ -204,7 +204,7 @@ def update_output(clear_clicks, find_clicks, date):
             # that you are using to return the layout components
             components_to_return = graphs + [yield_table]
         else:
-            components_to_return = html.H3('There are no dividends tomorrow', style={'textAlign': 'center', 'margin': 10, 'padding': 0, 'color': 'white'})
+            components_to_return = html.H3('There are no dividends opportunities', style={'textAlign': 'center', 'margin': 10, 'padding': 0, 'color': 'white'})
         # Make sure to return the correct number of outputs
         return components_to_return, find_clicks
     
