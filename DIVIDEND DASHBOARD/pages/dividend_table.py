@@ -7,7 +7,7 @@ import plotly.express as px
 #################### FUNCTIONS ####################
 def create_dividend_chart(data):
     # Create the line chart
-    fig = px.line(data, x='pay_date', y='next_payout', color='ticker', markers=True,
+    fig = px.line(data, x='pay_date', y='next_div_earned', color='Ticker', markers=True,
                 title='Dividend Payout Over Time')
     # Update layout
     fig.update_layout(title_x=0.5, template = 'plotly_dark', xaxis_title='', yaxis_title='Payout', legend_title="Ticker")
@@ -45,47 +45,10 @@ def set_decimal_places(df, column_name, decimal_places):
 def calculate_upcoming_dividends():
     #  read in the dividend_info sheet
     dividend_info_df = pd.read_excel('./data/Dividend_Dashboard.xlsx', sheet_name='dividend_info')
-    #  read in the current holdings sheet
-    holdings_df = pd.read_excel('./data/Dividend_Dashboard.xlsx', sheet_name='current_holdings')
-    #  keep only the columns we need
-    holdings_df = holdings_df[['Ticker', 'Shares']]
-    # sort the dividend_info_df by ticker
-    dividend_info_df = dividend_info_df.sort_values(by=['ticker'])
-    # create a list of tickers from dividend_info_df
-    dividend_info_list = dividend_info_df['ticker'].values.tolist()
-    # query the holdings_df for tickers in the dividend_info_list
-    holdings_df = holdings_df[holdings_df['Ticker'].isin(dividend_info_list)]
-    # sort the holdings_df by ticker
-    holdings_df = holdings_df.sort_values(by=['Ticker'])
-    # merge the two dataframes
-    merged_df = pd.merge(dividend_info_df, holdings_df, left_on='ticker', right_on='Ticker')
-    # drop the Ticker column
-    merged_df = merged_df.drop(columns=['Ticker'])
-    # round the cash_amount column to 2 decimal places
-    merged_df = set_decimal_places(merged_df, 'cash_amount', 2)
-    # calculate the next payout amount
-    merged_df['next_payout'] = merged_df['cash_amount'] * merged_df['Shares']
-    # round the next_payout column to 2 decimal places
-    merged_df = set_decimal_places(merged_df, 'next_payout', 2)
-    # create a new column for expected yearly payout
-    merged_df['est_yr_payout'] = merged_df['next_payout'] * merged_df['frequency']
-    # round the expected_yearly_payout column to 2 decimal places
-    merged_df = set_decimal_places(merged_df, 'est_yr_payout', 2)
-    # convert the pay_date column to datetime
-    merged_df['pay_date'] = pd.to_datetime(merged_df['pay_date'])
-    # get todays date as a datetime object
-    today = pd.to_datetime(date.today())
-    # format the date to match the pay_date column
-    today = today.strftime("%Y-%m-%d")
-    # exclude the tickers that have already paid out
-    merged_df = merged_df[merged_df['pay_date'] > today]
-    # sort the merged_df by pay date
-    merged_df = merged_df.sort_values(by=['pay_date'])
-    # convert the pay_date column back to string
-    merged_df['pay_date'] = merged_df['pay_date'].dt.strftime('%Y-%m-%d')
-    # convert ex_dividend_date column to string
-    merged_df['ex_dividend_date'] = merged_df['ex_dividend_date'].dt.strftime('%Y-%m-%d')
-    return merged_df
+    # Format dates as 'year-month-day'
+    dividend_info_df['ex_dividend_date'] = dividend_info_df['ex_dividend_date'].dt.strftime('%Y-%m-%d')
+    dividend_info_df['pay_date'] = dividend_info_df['pay_date'].dt.strftime('%Y-%m-%d')
+    return dividend_info_df
 
 #################### LOAD DATA ####################
 upcoming_dividends_df = calculate_upcoming_dividends()
@@ -120,7 +83,7 @@ layout = html.Div(children=[
                             "name": i, 
                             "id": i,
                             "type": "numeric",
-                            "format": MONEY_FORMAT if i in ['cash_amount', 'next_payout', 'est_yr_payout'] else None
+                            "format": MONEY_FORMAT if i in ['cash_amount', 'next_div_earned', 'est_yr_yield'] else None
                         } for i in upcoming_dividends_df.columns],
                     data=upcoming_dividends_df.to_dict('records'),
                     cell_selectable=False,
@@ -130,7 +93,7 @@ layout = html.Div(children=[
                     style_filter={'backgroundColor': '#FFEB9C', 'fontWeight': 'bold', 'color': '#9C5700'},
                     style_cell_conditional=[
                         {
-                            'if': { 'column_id': ['ticker', 'frequency', 'Shares', 'next_payout', 'est_yr_payout'] },
+                            'if': { 'column_id': ['Ticker', 'frequency', 'Shares', 'next_div_earned', 'est_yr_yield'] },
                             'textAlign': 'center',
                         }
                     ],
@@ -167,15 +130,8 @@ def update_dividend_table(start_date_str, end_date_str):
     upcoming_dividends_df = calculate_upcoming_dividends()
 
     div_df = upcoming_dividends_df.copy()
-    # Convert string dates to datetime
-    start_date = datetime.strptime(start_date_str, '%Y-%m-%d')
-    end_date = datetime.strptime(end_date_str, '%Y-%m-%d')
-    # convert the pay_date column to datetime
-    div_df['pay_date'] = pd.to_datetime(div_df['pay_date'])
-    # filter the dataframe based on the date range
-    div_df = div_df[(div_df['pay_date'] >= start_date) & (div_df['pay_date'] <= end_date)]
-    # convert the pay_date column back to string
-    div_df['pay_date'] = div_df['pay_date'].dt.strftime('%Y-%m-%d')
+    # Filter the dataframe based on the date range using query
+    div_df = div_df.query('pay_date >= @start_date_str and pay_date <= @end_date_str')
     # create the chart
     fig = create_dividend_chart(div_df)
     return div_df.to_dict('records'), fig
