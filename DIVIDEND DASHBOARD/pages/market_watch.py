@@ -68,14 +68,14 @@ def create_indices_charts():
     # Show figure
     return fig
 
-def load_and_combine_tickers(MT4_TICKERS, ETF_TICKERS):
+def load_and_combine_tickers(CRYPTO_TICKERS, MT4_TICKERS, ETF_TICKERS):
     # get the Ticker column from the dividend excel file
     dividend_tickers = pd.read_excel('data/Dividend_Dashboard.xlsx', sheet_name='current_holdings', usecols='G') 
     # convert divedend tickers to a list
     dividend_tickers = dividend_tickers['Ticker'].tolist()
     # sort the list
     dividend_tickers.sort()
-    tickers = ETF_TICKERS + MT4_TICKERS + dividend_tickers
+    tickers = ETF_TICKERS + CRYPTO_TICKERS + MT4_TICKERS + dividend_tickers
     return tickers
 
 # get data from mt4 csv files
@@ -197,7 +197,17 @@ def plotly_visualize_forecast(symbol, timeframe, data, forcast_processed, width=
 def process_chart_pipeline(symbol, show_hourly_chart=False):
     # todo add an if statement for forex pairs to use alphavantage api  
     print('processing chart pipeline', symbol)
+    if symbol in CRYPTO_TICKERS:
+        if show_hourly_chart:
+            print('processing hourly crypto', symbol)
+            fig = go.Figure()
+            return fig
+        else:
+            print('processing daily crypto', symbol)
+            fig = go.Figure()
+            return fig    
     if symbol in MT4_SYMBOLS:
+        print('\nprocessing mt4', symbol)
         daily_dataframes = {}
         daily_dataframes[symbol] = {
             'symbol_name': symbol,
@@ -224,7 +234,6 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         return fig
     else:
         data = get_yahoo_data(symbol)
-        print("\nData from Yahoo\n",data)
         forcasting_prep = forcasting_preparation(data)
         forecast = forecast_data(forcasting_prep)
         processed_forecast = process_forecasted_data(forecast)
@@ -303,10 +312,11 @@ def create_table(ticker):
             )
 
 #################### CONSTANTS ####################
+CRYPTO_TICKERS = ['BTC-USDC', 'ETH-USDC']
 MT4_SYMBOLS = ["USDCAD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD", "GBPUSD", "EURUSD", "OILUSe", "XAUUSD", "S&P500e", "BTCUSD", "ETHUSD"] 
-ETF_SYMBOLS = ['GLD', 'SPLG']
-TICKERS = load_and_combine_tickers(MT4_SYMBOLS, ETF_SYMBOLS)
-TICKER_DICT = {'USDCAD':'USD/CAD', 'USDJPY':'USD/JPY', 'USDCHF':'USD/CHF', 'EURUSD':'EUR/USD', 'GBPUSD':'GBP/USD', 'AUDUSD':'AUD/USD', 'NZDUSD':'NZD/USD', 'OILUSe':'Crude Oil', 'XAUUSD':'Gold Futures', 'GLD':'Gold ETF', 'S&P500e':'S&P 500 Futures', 'SPLG':'S&P 500 ETF', 'BTCUSD':'Bitcoin', 'ETHUSD':'Ethereum'}
+ETF_SYMBOLS = ['SPLG', 'GLD']
+TICKERS = load_and_combine_tickers(CRYPTO_TICKERS, MT4_SYMBOLS, ETF_SYMBOLS)
+TICKER_DICT = {'USDCAD':'USD/CAD', 'USDJPY':'USD/JPY', 'USDCHF':'USD/CHF', 'EURUSD':'EUR/USD', 'GBPUSD':'GBP/USD', 'AUDUSD':'AUD/USD', 'NZDUSD':'NZD/USD', 'OILUSe':'Crude Oil', 'XAUUSD':'Gold Futures', 'GLD':'Gold ETF', 'S&P500e':'S&P 500 Futures', 'SPLG':'S&P 500 ETF', 'BTC-USDC':'Bitcoin', 'ETH-USDC':'Ethereum'}
 TODAYS_DATE = date.today()
 POLYGON_API_KEY = os.environ.get('POLYGON_IO_API')
 ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_CO_API')
