@@ -90,10 +90,12 @@ def get_mt4_data(symbol, period='60'):
     return _df
 
 # get the data from yahoo finance
-def get_data(symbol):
+def get_yahoo_data(symbol):
     # todo: add a doc string
     # get data from yahoo finance to use
-    symbol_data = yf.download(symbol, period='max', rounding=False, prepost=True)
+    ticker = yf.Ticker(symbol)
+    symbol_data = ticker.history(period='2y', interval='1d')[['Open', 'High', 'Low', 'Close']]
+    symbol_data.index = symbol_data.index.tz_localize(None)
     return symbol_data
 
 # splice the data when povided a date best to do a forecast on 2 years of data
@@ -194,32 +196,18 @@ def plotly_visualize_forecast(symbol, timeframe, data, forcast_processed, width=
 
 def process_chart_pipeline(symbol, show_hourly_chart=False):
     # todo add an if statement for forex pairs to use alphavantage api  
-    
+    print('processing chart pipeline', symbol)
     if symbol in MT4_SYMBOLS:
-        if show_hourly_chart:
-            # Dictionary to store dataframes
-            hourly_dataframes = {}
-            hourly_dataframes[symbol] = {
-                'symbol_name': symbol,
-                'timeframe': '1 Hour',
-                'freq': 'H',
-                'df': get_mt4_data(symbol, period='60')
-            }
-            timeframe = hourly_dataframes[symbol]['timeframe']
-            freq = hourly_dataframes[symbol]['freq']
-            original_data = hourly_dataframes[symbol]['df'].copy()
-            
-        else:   
-            daily_dataframes = {}
-            daily_dataframes[symbol] = {
-                'symbol_name': symbol,
-                'timeframe': 'Daily',
-                'freq': 'D',
-                'df': get_mt4_data(symbol, period='1440')
-            }
-            timeframe = daily_dataframes[symbol]['timeframe']
-            freq = daily_dataframes[symbol]['freq']
-            original_data = daily_dataframes[symbol]['df'].copy()
+        daily_dataframes = {}
+        daily_dataframes[symbol] = {
+            'symbol_name': symbol,
+            'timeframe': 'Daily',
+            'freq': 'D',
+            'df': get_mt4_data(symbol, period='1440')
+        }
+        timeframe = daily_dataframes[symbol]['timeframe']
+        freq = daily_dataframes[symbol]['freq']
+        original_data = daily_dataframes[symbol]['df'].copy()
 
         # work through the process
         data_copy = original_data.copy()[['Close']]
@@ -235,10 +223,8 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         fig = plotly_visualize_forecast(symbol, timeframe, original_data, processed_forecast)
         return fig
     else:
-        data = get_data(symbol)
-        # get date 2 years ago
-        two_years_ago = TODAYS_DATE - timedelta(days=730)
-        data = splice_data(data, two_years_ago)
+        data = get_yahoo_data(symbol)
+        print("\nData from Yahoo\n",data)
         forcasting_prep = forcasting_preparation(data)
         forecast = forecast_data(forcasting_prep)
         processed_forecast = process_forecasted_data(forecast)
@@ -349,12 +335,12 @@ layout = html.Div(children=[
                 html.H4('Select Ticker:', style={'width': '100%'}),
                 dcc.Dropdown(id='ticker_dropdown', 
                             options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
-                            value='USDCAD', 
+                            value=TICKERS[0], 
                             clearable=False
                             )
             ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
             html.Div(children=[
-                dcc.Graph( id='ticker_chart', figure=process_chart_pipeline('USDCAD')),
+                dcc.Graph( id='ticker_chart', figure=process_chart_pipeline(TICKERS[0])),
                 html.Div(id='div_table', children=[
                 
                 ]),
