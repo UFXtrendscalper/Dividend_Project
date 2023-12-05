@@ -12,11 +12,17 @@ from prophet import Prophet
 from datetime import date, timedelta, datetime
 from dotenv import load_dotenv
 from files.TradingBotController import TradingBotController
+from files.StockDataFetcher import StockDataFetcher
+from files.CryptoDataFetcher import CryptoDataFetcher
+from files.MT4DataFetcher import MT4DataFetcher
 
 load_dotenv('.env')
 
 #################### Object Instantiation ####################
 bot_controller = TradingBotController()
+stock_data_fetcher = StockDataFetcher()
+crypto_data_fetcher = CryptoDataFetcher()
+mt4_data_fetcher = MT4DataFetcher()
 
 #################### FUNCTIONS ####################
 def create_indices_charts(): 
@@ -83,67 +89,6 @@ def load_and_combine_tickers(CRYPTO_TICKERS, MT4_TICKERS, ETF_TICKERS):
     dividend_tickers.sort()
     tickers = ETF_TICKERS + CRYPTO_TICKERS + MT4_TICKERS + dividend_tickers
     return tickers
-
-# get data from mt4 csv files
-def get_mt4_data(symbol, period='60'):
-    # read in a csv file
-    path = r'C:\\Users\sean7\AppData\\Roaming\\MetaQuotes\\Terminal\\0BB29DBF61C9F39836A4ED9CF1A954C9\\MQL4\\Files\\'
-    period = period # 1440 = 1 day, 60 = 1 hour
-    filename = f'{symbol}_{period}.csv'
-    # create column names
-    col_names = ['Date', 'Open', 'High', 'Low', 'Close']
-    _df = pd.read_csv(path+filename, index_col=0, parse_dates=True, delimiter=';', names=col_names)
-    return _df
-
-# get the data from yahoo finance
-def get_yahoo_data(symbol):
-    # todo: add a doc string
-    # get data from yahoo finance to use
-    symbol_data = yf.download(symbol, period='2y', interval='1d')[['Open', 'High', 'Low', 'Close']]
-    return symbol_data
-
-def get_crypto_data(symbol, period='1day'):
-    # note VIP0 is 2000 requests per 30 seconds
-    # Type of candlestick patterns: 1min, 3min, 5min, 15min, 30min, 1hour, 2hour, 4hour, 6hour, 8hour, 12hour, 1day, 1week
-    # get todays date with year month and day only
-    end = datetime.now().strftime("%Y %m %d %H %M %S")
-    # start 2 years ago
-    start = (datetime.now() - timedelta(days=730)).strftime("%Y %m %d %H %M %S")
-    # convert end to timestamp
-    end = datetime.strptime(end, "%Y %m %d %H %M %S").timestamp()
-    # convert start to timestamp
-    start = datetime.strptime(start, "%Y %m %d %H %M %S").timestamp()
-    # API endpoint
-    url = f'https://api.kucoin.com/api/v1/market/candles?type={period}&symbol={symbol}&startAt={int(start)}&endAt={int(end)}'
-    
-    # Making a GET request
-    response = requests.get(url)
-
-    # Checking if the request was successful
-    if response.status_code == 200:
-        # Parsing response data
-        data = response.json()
-        print("Crypto Data received by Kucoin:", data.keys())
-        # create a dataframe from the json data
-        df = pd.DataFrame(data['data'])
-        # rename the columns
-        df.columns = ['Date', 'Open', 'Close', 'High', 'Low',  'Volume', 'Turnover']
-        # convert date column to an integar
-        df['Date'] = df['Date'].astype(int)
-        # convert the timestamp to datetime
-        df['Date'] = pd.to_datetime(df['Date'], unit='s')
-        # set the index to be the date column
-        df.set_index('Date', inplace=True)
-        # set the columns to be floats
-        df = df.astype(float) 
-        # sort the dataframe by date
-        df = df.sort_index(ascending=True)
-        # keep only the columns in this order Open High Low Close
-        df = df[['Open', 'High', 'Low', 'Close']]
-        # return the dataframe
-        return df
-    else:
-        print("Failed to retrieve Kucoin data. Status code:", response.status_code)
 
 # splice the data when povided a date best to do a forecast on 2 years of data
 def splice_data(df, date, query=False, query_on=''):
@@ -253,10 +198,13 @@ def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height
 
 def process_chart_pipeline(symbol, show_hourly_chart=False):
     # todo add an if statement for forex pairs to use alphavantage api  
-    print('processing chart pipeline', symbol)
+    print('\n\nprocessing chart pipeline', symbol)
     if symbol not in CRYPTO_TICKERS and symbol not in MT4_SYMBOLS:
         print('\nprocessing daily stock', symbol)
-        data = get_yahoo_data(symbol)
+        # set the ticker
+        stock_data_fetcher.set_ticker(symbol)
+        # fetch the data
+        data = stock_data_fetcher.fetch_data()
         forcasting_prep = forcasting_preparation(data)
         forecast = forecast_data(forcasting_prep)
         processed_forecast = process_forecasted_data(forecast)
@@ -265,9 +213,12 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         fig = plotly_visualize_forecast(symbol, 'Daily', MERGED_DATA[symbol])
         return fig
     elif symbol in CRYPTO_TICKERS:
+        # set the symbol
+        crypto_data_fetcher.set_symbol(symbol)
         if show_hourly_chart:
-            print('processing hourly crypto', symbol)
-            crypto_df = get_crypto_data(symbol, period='1hour')    
+            print('\nprocessing hourly crypto', symbol)
+            # fetch the data
+            crypto_df = crypto_data_fetcher.fetch_data(period='1hour')
             # work through the process
             forecasting_prep = forcasting_preparation(crypto_df)
             forecasted_data = forecast_data(forecasting_prep)
@@ -279,9 +230,9 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
             fig = plotly_visualize_forecast(symbol, "1hour", crypto_slice_df)
             return fig
         else:
-            print('processing daily crypto', symbol)
-            crypto_df = get_crypto_data(symbol)    
-            # work through the process
+            print('\nprocessing daily crypto', symbol)
+            # fetch the data
+            crypto_df = crypto_data_fetcher.fetch_data(period='1hour')# work through the process
             forecasting_prep = forcasting_preparation(crypto_df)
             forecasted_data = forecast_data(forecasting_prep)
             processed_forecast = process_forecasted_data(forecasted_data)
@@ -291,16 +242,11 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
             return fig   
     elif symbol in MT4_SYMBOLS:
         print('\nprocessing mt4', symbol)
-        daily_dataframes = {}
-        daily_dataframes[symbol] = {
-            'symbol_name': symbol,
-            'timeframe': 'Daily',
-            'freq': 'D',
-            'df': get_mt4_data(symbol, period='1440')
-        }
-        timeframe = daily_dataframes[symbol]['timeframe']
-        freq = daily_dataframes[symbol]['freq']
-        original_data = daily_dataframes[symbol]['df'].copy()
+        # set the symbol
+        mt4_data_fetcher.set_symbol(symbol)
+        timeframe = 'Daily'
+        freq = 'D'
+        original_data = mt4_data_fetcher.fetch_data()
 
         # work through the process
         forecasting_prep = forcasting_preparation(original_data)
@@ -385,7 +331,7 @@ def create_table(ticker):
 
 #################### CONSTANTS ####################
 CRYPTO_TICKERS = ['BTC-USDC', 'ETH-USDC']
-MT4_SYMBOLS = ["USDCAD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD", "GBPUSD", "EURUSD", "OILUSe", "XAUUSD", "S&P500e", "BTCUSD", "ETHUSD"] 
+MT4_SYMBOLS = ["USDCAD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD", "GBPUSD", "EURUSD", "OILUSe", "XAUUSD", "S&P500e"] 
 ETF_SYMBOLS = ['SPLG', 'GLD']
 TICKERS = load_and_combine_tickers(CRYPTO_TICKERS, MT4_SYMBOLS, ETF_SYMBOLS)
 TICKER_DICT = {'USDCAD':'USD/CAD', 'USDJPY':'USD/JPY', 'USDCHF':'USD/CHF', 'EURUSD':'EUR/USD', 'GBPUSD':'GBP/USD', 'AUDUSD':'AUD/USD', 'NZDUSD':'NZD/USD', 'OILUSe':'Crude Oil', 'XAUUSD':'Gold Futures', 'GLD':'Gold ETF', 'S&P500e':'S&P 500 Futures', 'SPLG':'S&P 500 ETF', 'BTC-USDC':'Bitcoin', 'ETH-USDC':'Ethereum'}
@@ -501,7 +447,7 @@ def update_chart(timeframe, ticker, n, buy_message, sell_message, store_data):
 )
 def toggle_bot_info_visibility(selected_ticker):
     # Check if the selected ticker is Bitcoin
-    print('selected_ticker', selected_ticker)
+    print('\nselected_ticker', selected_ticker)
     if selected_ticker == 'BTC-USDC':  # Replace with your Bitcoin ticker ID
         # check if the pickle file exists
         if os.path.exists('data/trade_messages.pickle'):
