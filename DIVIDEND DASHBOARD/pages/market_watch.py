@@ -481,7 +481,9 @@ layout = html.Div(children=[
             id='interval-component',
             interval=15*60*1000, # in milliseconds = will update every 15 minutes
             n_intervals=0
-        )
+        ), 
+        dcc.Store(id='autotrade_store', storage_type='local')
+
         
 ])
 
@@ -554,24 +556,39 @@ def toggle_bot_info_visibility(selected_ticker):
 # Callback to toggle the Autotrade label
 @callback(
     Output('autotrade_label', 'children'),
+    Output('autotrade_store', 'data'),  # Update the store with the current state
     Input('autotrade_button', 'n_clicks'),
     Input('buy_textarea', 'value'),
     Input('sell_textarea', 'value'),
+    State('autotrade_store', 'data'),  # Use the store's data to determine the current state
     prevent_initial_call=True
 )
-def toggle_autotrade(n_clicks, buy_message, sell_message):
+def toggle_autotrade(n_clicks, buy_message, sell_message, store_data):
+    # Initialize store_data if it's None
+    if store_data is None:
+        store_data = {'autotrade_on': False, 'buy_message': '', 'sell_message': ''}
+
     # Check if the number of clicks is even or odd
     if n_clicks % 2 == 0:
         # Even number of clicks, autotrade is off
-        return [html.P('Autotrade is Off', style={'color': 'red'})]
+        store_data['autotrade_on'] = False
+        label = [html.P('Autotrade is Off', style={'color': 'red'})]
     else:
+        # Odd number of clicks, autotrade is on
+        store_data['autotrade_on'] = True
+        label = [html.P('Autotrade is On', style={'color': 'green'})]
+        
+        # Update the buy and sell messages
+        if buy_message and sell_message:
+            store_data['buy_message'] = buy_message
+            store_data['sell_message'] = sell_message
+        
         # don't save the buy and sell messages if they are empty
         if buy_message == '' or sell_message == '':
-            return
+            return label, store_data
         # create a dictionary to store the buy and sell messages
         trade_messages = {'buy_message': buy_message, 'sell_message': sell_message}
         # SAVE THE BUY AND SELL MESSAGES TO A PICKLE FILE
         with open('data/trade_messages.pickle', 'wb') as file:
             pickle.dump(trade_messages, file)
-        # Odd number of clicks, autotrade is on
-        return [html.P('Autotrade is On', style={'color': 'green'})]
+        return label, store_data
