@@ -1,18 +1,22 @@
 import dash
-from dash import html, dcc, Input, Output, State, callback, dash_table 
-import yfinance as yf
-from plotly.subplots import make_subplots
-import plotly.graph_objects as go
-import pandas as pd
-import requests
-from prophet import Prophet
-from datetime import date, timedelta, datetime
 import os
-from dotenv import load_dotenv
 import pickle
 import json
+import requests
+import pandas as pd
+import yfinance as yf
+import plotly.graph_objects as go
+from dash import html, dcc, Input, Output, State, callback, dash_table 
+from plotly.subplots import make_subplots
+from prophet import Prophet
+from datetime import date, timedelta, datetime
+from dotenv import load_dotenv
+from files.TradingBotController import TradingBotController
 
 load_dotenv('.env')
+
+#################### Object Instantiation ####################
+bot_controller = TradingBotController()
 
 #################### FUNCTIONS ####################
 def create_indices_charts(): 
@@ -378,40 +382,6 @@ def create_table(ticker):
                     style_table={'overflowX': 'scroll', 'width': '100%'}, 
             )
 
-def start_buy_bot(buy_message):
-    print("\nStarting the buy bot...\n")
-    # Convert string dict to dict
-    trade_dict = eval(buy_message)
-    trade_dict = json.dumps(trade_dict, indent=4)
-    # Define the API endpoint
-    api_url = "https://3commas.io/trade_signal/trading_view"
-    # Your data payload this is for stopping the bot
-    payload = trade_dict
-    # Send POST request
-    response = requests.post(api_url, json=payload)
-    # Check response
-    if response.status_code == 200:
-        print("Bot started successfully.")
-    else:
-        print("Failed to stop the bot. Status code:", response.status_code)
-
-def stop_buy_bot(sell_message):
-    print("\nStopping the buy bot...\n")
-    # Convert string dict to dict
-    trade_dict = eval(sell_message)
-    trade_dict = json.dumps(trade_dict, indent=4)
-    # Define the API endpoint
-    api_url = "https://3commas.io/trade_signal/trading_view"
-    # Your data payload this is for stopping the bot
-    payload = trade_dict
-    # Send POST request
-    response = requests.post(api_url, json=payload)
-    # Check response
-    if response.status_code == 200:
-        print("Bot stopped successfully.")
-    else:
-        print("Failed to stop the bot. Status code:", response.status_code)
-
 
 #################### CONSTANTS ####################
 CRYPTO_TICKERS = ['BTC-USDC', 'ETH-USDC']
@@ -496,33 +466,29 @@ layout = html.Div(children=[
     Input('interval-component', 'n_intervals'),
     Input('buy_textarea', 'value'),
     Input('sell_textarea', 'value'),
-    State('autotrade_button', 'n_clicks'),  # Add this to check the state of the autotrade button
+    State('autotrade_store', 'data'),  # Access store_data as State
     # do not run the callback if the ticker is not changed
     prevent_initial_call=False
     )
-def update_chart(timeframe, ticker, n, buy_message, sell_message, autotrade_clicks):
-    # Check if Autotrade is turned on (even number of clicks means it's off)
-    autotrade_on = autotrade_clicks % 2 != 0
-
+def update_chart(timeframe, ticker, n, buy_message, sell_message, store_data):
     if timeframe == 'Hourly':
         fig = process_chart_pipeline(ticker, show_hourly_chart=True)
     else:
         fig = process_chart_pipeline(ticker)
     table = create_table(ticker)
-    # check if symbol is btcusdc
-    if ticker == 'BTC-USDC' and autotrade_on:
+    # Use store_data to check autotrade status and ticker selection is Bitcoin
+    if ticker == 'BTC-USDC' and store_data and store_data.get('autotrade_on'):
         # get the latest row wher Close is not null
         latest_data = MERGED_DATA[ticker].iloc[-91]
         # Check conditions and print for now
         if latest_data['Close'] < latest_data['lower_band']:
             print(f"BTC-USDC Close price is below the lower band: {latest_data['Close']}")
             # Implement buy logic here
-            start_buy_bot(buy_message)
+            bot_controller.start_bot(buy_message)
         elif latest_data['Close'] > latest_data['upper_band']:
             print(f"BTC-USDC Close price is above the upper band: {latest_data['Close']}")
             # Implement sell logic here
-            stop_buy_bot(sell_message)
-
+            bot_controller.stop_bot(sell_message)
     
     return fig, table
 
