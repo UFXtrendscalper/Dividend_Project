@@ -98,6 +98,49 @@ def get_yahoo_data(symbol):
     symbol_data.index = symbol_data.index.tz_localize(None)
     return symbol_data
 
+def get_crypto_data(symbol, period='1day'):
+    # note VIP0 is 2000 requests per 30 seconds
+    # Type of candlestick patterns: 1min, 3min, 5min, 15min, 30min, 1hour, 2hour, 4hour, 6hour, 8hour, 12hour, 1day, 1week
+    # get todays date with year month and day only
+    end = datetime.now().strftime("%Y %m %d")
+    # start 2 years ago
+    start = (datetime.now() - timedelta(days=730)).strftime("%Y %m %d")
+    # convert end to timestamp
+    end = datetime.strptime(end, "%Y %m %d").timestamp()
+    # convert start to timestamp
+    start = datetime.strptime(start, "%Y %m %d").timestamp()
+    # API endpoint
+    url = f'https://api.kucoin.com/api/v1/market/candles?type={period}&symbol={symbol}&startAt={int(start)}&endAt={int(end)}'
+    
+    # Making a GET request
+    response = requests.get(url)
+
+    # Checking if the request was successful
+    if response.status_code == 200:
+        # Parsing response data
+        data = response.json()
+        print("Crypto Data received by Kucoin:", data.keys())
+        # create a dataframe from the json data
+        df = pd.DataFrame(data['data'])
+        # rename the columns
+        df.columns = ['Date', 'Open', 'Close', 'High', 'Low',  'Volume', 'Turnover']
+        # convert date column to an integar
+        df['Date'] = df['Date'].astype(int)
+        # convert the timestamp to datetime
+        df['Date'] = pd.to_datetime(df['Date'], unit='s')
+        # set the index to be the date column
+        df.set_index('Date', inplace=True)
+        # set the columns to be floats
+        df = df.astype(float) 
+        # sort the dataframe by date
+        df = df.sort_index(ascending=True)
+        # keep only the columns in this order Open High Low Close
+        df = df[['Open', 'High', 'Low', 'Close']]
+        # return the dataframe
+        return df
+    else:
+        print("Failed to retrieve Kucoin data. Status code:", response.status_code)
+
 # splice the data when povided a date best to do a forecast on 2 years of data
 def splice_data(df, date, query=False, query_on=''):
     # todo: add a doc string
@@ -209,11 +252,19 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
     if symbol in CRYPTO_TICKERS:
         if show_hourly_chart:
             print('processing hourly crypto', symbol)
+            get_crypto_data(symbol, period='1hour')    
             fig = go.Figure()
             return fig
         else:
             print('processing daily crypto', symbol)
-            fig = go.Figure()
+            crypto_df = get_crypto_data(symbol)    
+            # work through the process
+            forecasting_prep = forcasting_preparation(crypto_df)
+            forecasted_data = forecast_data(forecasting_prep)
+            processed_forecast = process_forecasted_data(forecasted_data)
+            merged_data = merge_dataframes(crypto_df, processed_forecast)
+            # use plotly_visualize_forecast to plot the data
+            fig = plotly_visualize_forecast(symbol, "Daily", merged_data)
             return fig    
     if symbol in MT4_SYMBOLS:
         print('\nprocessing mt4', symbol)
