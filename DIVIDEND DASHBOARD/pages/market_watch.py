@@ -127,15 +127,24 @@ def forecast_data(data, freq='D'):
 def process_forecasted_data(forecast_df):
     # todo: add a doc string
     df = forecast_df.copy()
-    # keep only needed columns in the forecast dataframe
-    df = df[['ds', 'yhat', 'yhat_lower', 'yhat_upper', 'trend']]  
     # smooth out the prediction lines
     df['predicted_price'] = df['yhat'].rolling(window=7).mean()
     df['upper_band'] = df['yhat_upper'].rolling(window=7).mean()
     df['lower_band'] = df['yhat_lower'].rolling(window=7).mean()
+    # keep only needed columns in the forecast dataframe
+    df = df[['ds', 'predicted_price', 'lower_band', 'upper_band', 'trend']] 
+    # rename the ds column to Date
+    df = df.rename(columns={'ds': 'Date'})
+    # set the Date column as the index
+    df = df.set_index('Date') 
     return df
 
-def plotly_visualize_forecast(symbol, timeframe, data, forcast_processed, width=1500, height=890):
+def merge_dataframes(original_data, forecast_data):
+    # merge the forecast dataframe with the original dataframe on the Date index
+    merged_df = pd.merge(original_data, forecast_data, on='Date', how='outer')
+    return merged_df 
+
+def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height=890):
     # todo: add a doc string
 
     # check if symbol is in the ticker dictionary
@@ -153,7 +162,7 @@ def plotly_visualize_forecast(symbol, timeframe, data, forcast_processed, width=
                         {'step': "all"}]
     # create the plotly chart
     fig = go.Figure()
-    fig.add_trace(go.Candlestick(x=data.index, open=data.Open, high=data.High, low=data.Low, close=data.Close, name='Candlestick', increasing_line_color='#F6FEFF', decreasing_line_color='#1CBDFB'))
+    fig.add_trace(go.Candlestick(x=merged_data.index, open=merged_data.Open, high=merged_data.High, low=merged_data.Low, close=merged_data.Close, name='Candlestick', increasing_line_color='#F6FEFF', decreasing_line_color='#1CBDFB'))
     
     if timeframe == 'Daily':
         # update the layout of the chart with the buttons
@@ -188,10 +197,10 @@ def plotly_visualize_forecast(symbol, timeframe, data, forcast_processed, width=
     fig.update_yaxes(tickprefix="$")
     
     # add the predicted price and trend lines to the chart
-    fig.add_trace(go.Scatter(x=forcast_processed.ds, y=forcast_processed.predicted_price, line=dict(color='#B111D6', width=1), name='Predicted Price'))
-    fig.add_trace(go.Scatter(x=forcast_processed.ds, y=forcast_processed.trend, line=dict(color='#0074BA', width=1), name='Predicted Trend'))
-    fig.add_trace(go.Scatter(x=forcast_processed.ds, y=forcast_processed.upper_band, line=dict(color='#1E82CD', width=2), name='upper_band'))
-    fig.add_trace(go.Scatter(x=forcast_processed.ds, y=forcast_processed.lower_band, line=dict(color='#1E82CD', width=2), name='lower_band'))
+    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.predicted_price, line=dict(color='#B111D6', width=1), name='Predicted Price'))
+    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.trend, line=dict(color='#0074BA', width=1), name='Predicted Trend'))
+    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.upper_band, line=dict(color='#1E82CD', width=2), name='upper_band'))
+    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.lower_band, line=dict(color='#1E82CD', width=2), name='lower_band'))
     return fig
 
 def process_chart_pipeline(symbol, show_hourly_chart=False):
@@ -220,25 +229,21 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         original_data = daily_dataframes[symbol]['df'].copy()
 
         # work through the process
-        data_copy = original_data.copy()[['Close']]
-        forecasting_prep = forcasting_preparation(data_copy)
+        forecasting_prep = forcasting_preparation(original_data)
         forecasted_data = forecast_data(forecasting_prep, freq=freq)
         processed_forecast = process_forecasted_data(forecasted_data)
-        # set the index to the date column
-        processed_forecast.index = processed_forecast['ds']
-        # Filter out weekends
-        original_data = original_data[original_data.index.dayofweek < 5]
-        processed_forecast = processed_forecast[processed_forecast.index.dayofweek < 5]
+        merged_data = merge_dataframes(original_data, processed_forecast)
         # use plotly_visualize_forecast to plot the data
-        fig = plotly_visualize_forecast(symbol, timeframe, original_data, processed_forecast)
+        fig = plotly_visualize_forecast(symbol, timeframe, merged_data)
         return fig
     else:
         data = get_yahoo_data(symbol)
         forcasting_prep = forcasting_preparation(data)
         forecast = forecast_data(forcasting_prep)
         processed_forecast = process_forecasted_data(forecast)
+        merged_data = merge_dataframes(data, processed_forecast)
         # visulize the data 
-        fig = plotly_visualize_forecast(symbol, 'Daily', data, processed_forecast)
+        fig = plotly_visualize_forecast(symbol, 'Daily', merged_data)
         return fig
 
 def fetch_dividend_data(ticker, api_key):
