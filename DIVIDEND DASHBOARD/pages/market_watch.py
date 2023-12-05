@@ -1,5 +1,5 @@
 import dash
-from dash import html, dcc, Input, Output, callback, dash_table 
+from dash import html, dcc, Input, Output, State, callback, dash_table 
 import yfinance as yf
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
@@ -9,6 +9,8 @@ from prophet import Prophet
 from datetime import date, timedelta, datetime
 import os
 from dotenv import load_dotenv
+import pickle
+import json
 
 load_dotenv('.env')
 
@@ -93,22 +95,20 @@ def get_mt4_data(symbol, period='60'):
 def get_yahoo_data(symbol):
     # todo: add a doc string
     # get data from yahoo finance to use
-    ticker = yf.Ticker(symbol)
-    symbol_data = ticker.history(period='2y', interval='1d')[['Open', 'High', 'Low', 'Close']]
-    symbol_data.index = symbol_data.index.tz_localize(None)
+    symbol_data = yf.download(symbol, period='2y', interval='1d')[['Open', 'High', 'Low', 'Close']]
     return symbol_data
 
 def get_crypto_data(symbol, period='1day'):
     # note VIP0 is 2000 requests per 30 seconds
     # Type of candlestick patterns: 1min, 3min, 5min, 15min, 30min, 1hour, 2hour, 4hour, 6hour, 8hour, 12hour, 1day, 1week
     # get todays date with year month and day only
-    end = datetime.now().strftime("%Y %m %d")
+    end = datetime.now().strftime("%Y %m %d %H %M %S")
     # start 2 years ago
-    start = (datetime.now() - timedelta(days=730)).strftime("%Y %m %d")
+    start = (datetime.now() - timedelta(days=730)).strftime("%Y %m %d %H %M %S")
     # convert end to timestamp
-    end = datetime.strptime(end, "%Y %m %d").timestamp()
+    end = datetime.strptime(end, "%Y %m %d %H %M %S").timestamp()
     # convert start to timestamp
-    start = datetime.strptime(start, "%Y %m %d").timestamp()
+    start = datetime.strptime(start, "%Y %m %d %H %M %S").timestamp()
     # API endpoint
     url = f'https://api.kucoin.com/api/v1/market/candles?type={period}&symbol={symbol}&startAt={int(start)}&endAt={int(end)}'
     
@@ -205,6 +205,7 @@ def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height
                         {'step': "all"}]
     # create the plotly chart
     fig = go.Figure()
+    fig.data = []
     fig.add_trace(go.Candlestick(x=merged_data.index, open=merged_data.Open, high=merged_data.High, low=merged_data.Low, close=merged_data.Close, name='Candlestick', increasing_line_color='#F6FEFF', decreasing_line_color='#1CBDFB'))
     
     if timeframe == 'Daily':
@@ -249,11 +250,29 @@ def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height
 def process_chart_pipeline(symbol, show_hourly_chart=False):
     # todo add an if statement for forex pairs to use alphavantage api  
     print('processing chart pipeline', symbol)
-    if symbol in CRYPTO_TICKERS:
+    if symbol not in CRYPTO_TICKERS and symbol not in MT4_SYMBOLS:
+        print('\nprocessing daily stock', symbol)
+        data = get_yahoo_data(symbol)
+        forcasting_prep = forcasting_preparation(data)
+        forecast = forecast_data(forcasting_prep)
+        processed_forecast = process_forecasted_data(forecast)
+        MERGED_DATA[symbol] = merge_dataframes(data, processed_forecast)
+        # visulize the data 
+        fig = plotly_visualize_forecast(symbol, 'Daily', MERGED_DATA[symbol])
+        return fig
+    elif symbol in CRYPTO_TICKERS:
         if show_hourly_chart:
             print('processing hourly crypto', symbol)
-            get_crypto_data(symbol, period='1hour')    
-            fig = go.Figure()
+            crypto_df = get_crypto_data(symbol, period='1hour')    
+            # work through the process
+            forecasting_prep = forcasting_preparation(crypto_df)
+            forecasted_data = forecast_data(forecasting_prep)
+            processed_forecast = process_forecasted_data(forecasted_data)
+            MERGED_DATA[symbol] = merge_dataframes(crypto_df, processed_forecast)
+            # slice the data to only show the last 291 rows
+            crypto_slice_df = MERGED_DATA[symbol].iloc[-291:len(crypto_df)+3]
+            # use plotly_visualize_forecast to plot the data
+            fig = plotly_visualize_forecast(symbol, "1hour", crypto_slice_df)
             return fig
         else:
             print('processing daily crypto', symbol)
@@ -262,11 +281,11 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
             forecasting_prep = forcasting_preparation(crypto_df)
             forecasted_data = forecast_data(forecasting_prep)
             processed_forecast = process_forecasted_data(forecasted_data)
-            merged_data = merge_dataframes(crypto_df, processed_forecast)
+            MERGED_DATA[symbol] = merge_dataframes(crypto_df, processed_forecast)
             # use plotly_visualize_forecast to plot the data
-            fig = plotly_visualize_forecast(symbol, "Daily", merged_data)
-            return fig    
-    if symbol in MT4_SYMBOLS:
+            fig = plotly_visualize_forecast(symbol, "Daily", MERGED_DATA[symbol])
+            return fig   
+    elif symbol in MT4_SYMBOLS:
         print('\nprocessing mt4', symbol)
         daily_dataframes = {}
         daily_dataframes[symbol] = {
@@ -283,19 +302,11 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         forecasting_prep = forcasting_preparation(original_data)
         forecasted_data = forecast_data(forecasting_prep, freq=freq)
         processed_forecast = process_forecasted_data(forecasted_data)
-        merged_data = merge_dataframes(original_data, processed_forecast)
+        MERGED_DATA[symbol] = merge_dataframes(original_data, processed_forecast)
         # use plotly_visualize_forecast to plot the data
-        fig = plotly_visualize_forecast(symbol, timeframe, merged_data)
+        fig = plotly_visualize_forecast(symbol, timeframe, MERGED_DATA[symbol])
         return fig
-    else:
-        data = get_yahoo_data(symbol)
-        forcasting_prep = forcasting_preparation(data)
-        forecast = forecast_data(forcasting_prep)
-        processed_forecast = process_forecasted_data(forecast)
-        merged_data = merge_dataframes(data, processed_forecast)
-        # visulize the data 
-        fig = plotly_visualize_forecast(symbol, 'Daily', merged_data)
-        return fig
+        
 
 def fetch_dividend_data(ticker, api_key):
     """
@@ -367,6 +378,41 @@ def create_table(ticker):
                     style_table={'overflowX': 'scroll', 'width': '100%'}, 
             )
 
+def start_buy_bot(buy_message):
+    print("\nStarting the buy bot...\n")
+    # Convert string dict to dict
+    trade_dict = eval(buy_message)
+    trade_dict = json.dumps(trade_dict, indent=4)
+    # Define the API endpoint
+    api_url = "https://3commas.io/trade_signal/trading_view"
+    # Your data payload this is for stopping the bot
+    payload = trade_dict
+    # Send POST request
+    response = requests.post(api_url, json=payload)
+    # Check response
+    if response.status_code == 200:
+        print("Bot started successfully.")
+    else:
+        print("Failed to stop the bot. Status code:", response.status_code)
+
+def stop_buy_bot(sell_message):
+    print("\nStopping the buy bot...\n")
+    # Convert string dict to dict
+    trade_dict = eval(sell_message)
+    trade_dict = json.dumps(trade_dict, indent=4)
+    # Define the API endpoint
+    api_url = "https://3commas.io/trade_signal/trading_view"
+    # Your data payload this is for stopping the bot
+    payload = trade_dict
+    # Send POST request
+    response = requests.post(api_url, json=payload)
+    # Check response
+    if response.status_code == 200:
+        print("Bot stopped successfully.")
+    else:
+        print("Failed to stop the bot. Status code:", response.status_code)
+
+
 #################### CONSTANTS ####################
 CRYPTO_TICKERS = ['BTC-USDC', 'ETH-USDC']
 MT4_SYMBOLS = ["USDCAD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD", "GBPUSD", "EURUSD", "OILUSe", "XAUUSD", "S&P500e", "BTCUSD", "ETHUSD"] 
@@ -377,6 +423,7 @@ TODAYS_DATE = date.today()
 POLYGON_API_KEY = os.environ.get('POLYGON_IO_API')
 ALPHAVANTAGE_API_KEY = os.environ.get('ALPHAVANTAGE_CO_API')
 MONEY_FORMAT = dash_table.FormatTemplate.money(2)
+MERGED_DATA = {}
 
 
 dash.register_page(__name__, path='/market_watch', name='Market Watch 📈')
@@ -393,15 +440,14 @@ layout = html.Div(children=[
                 html.H4('Select TimeFrame:', style={'width': '100%'}),
                 dcc.Dropdown(id='timeframe_dropdown', 
                             options=[{'label': 'Daily', 'value': 'Daily'}, {'label': 'Hourly', 'value': 'Hourly'}],
-                            value='Daily', 
-                            clearable=False
+                            value='Daily', clearable=False, persistence=True, persisted_props=['value'], 
+                            persistence_type='local'
                             ),
                 html.Br(),            
                 html.H4('Select Ticker:', style={'width': '100%'}),
                 dcc.Dropdown(id='ticker_dropdown', 
                             options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
-                            value=TICKERS[0], 
-                            clearable=False
+                            value=TICKERS[0], clearable=False, persistence=True, persisted_props=['value'], persistence_type='local'
                             ),
                 
                 # Wrapped BUY and SELL sections in a Div with an id 'bot_info'
@@ -422,7 +468,7 @@ layout = html.Div(children=[
 
             ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
             html.Div(children=[
-                dcc.Graph( id='ticker_chart', figure=process_chart_pipeline(TICKERS[0])),
+                dcc.Graph( id='ticker_chart'),
                 html.Div(id='div_table', children=[
                 
                 ]),
@@ -446,28 +492,86 @@ layout = html.Div(children=[
     Input('timeframe_dropdown', 'value'),
     Input('ticker_dropdown', 'value'),
     Input('interval-component', 'n_intervals'),
+    Input('buy_textarea', 'value'),
+    Input('sell_textarea', 'value'),
+    State('autotrade_button', 'n_clicks'),  # Add this to check the state of the autotrade button
     # do not run the callback if the ticker is not changed
-    prevent_initial_call=True
+    prevent_initial_call=False
     )
-def update_chart(timeframe, ticker, n):
+def update_chart(timeframe, ticker, n, buy_message, sell_message, autotrade_clicks):
+    # Check if Autotrade is turned on (even number of clicks means it's off)
+    autotrade_on = autotrade_clicks % 2 != 0
+
     if timeframe == 'Hourly':
         fig = process_chart_pipeline(ticker, show_hourly_chart=True)
     else:
         fig = process_chart_pipeline(ticker)
     table = create_table(ticker)
+    # check if symbol is btcusdc
+    if ticker == 'BTC-USDC' and autotrade_on:
+        # get the latest row wher Close is not null
+        latest_data = MERGED_DATA[ticker].iloc[-91]
+        # Check conditions and print for now
+        if latest_data['Close'] < latest_data['lower_band']:
+            print(f"BTC-USDC Close price is below the lower band: {latest_data['Close']}")
+            # Implement buy logic here
+            start_buy_bot(buy_message)
+        elif latest_data['Close'] > latest_data['upper_band']:
+            print(f"BTC-USDC Close price is above the upper band: {latest_data['Close']}")
+            # Implement sell logic here
+            stop_buy_bot(sell_message)
+
+    
     return fig, table
 
 # Callback to toggle visibility of the BUY and SELL sections
 @callback(
     Output('bot_info', 'style'),
+    Output('buy_textarea', 'value'),
+    Output('sell_textarea', 'value'),
     Input('ticker_dropdown', 'value')
 )
 def toggle_bot_info_visibility(selected_ticker):
     # Check if the selected ticker is Bitcoin
+    print('selected_ticker', selected_ticker)
     if selected_ticker == 'BTC-USDC':  # Replace with your Bitcoin ticker ID
+        # check if the pickle file exists
+        if os.path.exists('data/trade_messages.pickle'):
+            # load the pickle file
+            with open('data/trade_messages.pickle', 'rb') as file:
+                trade_messages = pickle.load(file)
+            # return the trade messages
+            buy_message = trade_messages['buy_message']
+            print('buy_message', buy_message)
+            sell_message = trade_messages['sell_message']
+            print('sell_message', sell_message)
         # If Bitcoin is selected, make the sections visible
-        return {'display': 'block'}
+        return {'display': 'block'}, buy_message, sell_message
     else:
         # If another ticker is selected, hide the sections
-        return {'display': 'none'}
+        return {'display': 'none'}, '', ''
 
+# Callback to toggle the Autotrade label
+@callback(
+    Output('autotrade_label', 'children'),
+    Input('autotrade_button', 'n_clicks'),
+    Input('buy_textarea', 'value'),
+    Input('sell_textarea', 'value'),
+    prevent_initial_call=True
+)
+def toggle_autotrade(n_clicks, buy_message, sell_message):
+    # Check if the number of clicks is even or odd
+    if n_clicks % 2 == 0:
+        # Even number of clicks, autotrade is off
+        return [html.P('Autotrade is Off', style={'color': 'red'})]
+    else:
+        # don't save the buy and sell messages if they are empty
+        if buy_message == '' or sell_message == '':
+            return
+        # create a dictionary to store the buy and sell messages
+        trade_messages = {'buy_message': buy_message, 'sell_message': sell_message}
+        # SAVE THE BUY AND SELL MESSAGES TO A PICKLE FILE
+        with open('data/trade_messages.pickle', 'wb') as file:
+            pickle.dump(trade_messages, file)
+        # Odd number of clicks, autotrade is on
+        return [html.P('Autotrade is On', style={'color': 'green'})]
