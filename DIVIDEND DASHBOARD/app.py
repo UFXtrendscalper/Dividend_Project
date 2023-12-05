@@ -6,7 +6,7 @@ import dash_bootstrap_components as dbc
 external_css = [dbc.themes.CYBORG]
 
 # create a dash app and set the pages_folder to 'pages' and use_pages to True
-app = dash.Dash(__name__, pages_folder='pages', use_pages=True , external_stylesheets=external_css)
+app = dash.Dash(__name__, pages_folder='pages', use_pages=True , external_stylesheets=external_css, suppress_callback_exceptions=True)
 
 # create the layout for the app
 app.layout = html.Div([

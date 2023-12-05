@@ -389,8 +389,6 @@ layout = html.Div(children=[
         ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%'}),
         html.Hr(style={'color': 'white'}),
         html.Div([
-
-
             html.Div([
                 html.H4('Select TimeFrame:', style={'width': '100%'}),
                 dcc.Dropdown(id='timeframe_dropdown', 
@@ -398,12 +396,30 @@ layout = html.Div(children=[
                             value='Daily', 
                             clearable=False
                             ),
+                html.Br(),            
                 html.H4('Select Ticker:', style={'width': '100%'}),
                 dcc.Dropdown(id='ticker_dropdown', 
                             options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
                             value=TICKERS[0], 
                             clearable=False
-                            )
+                            ),
+                
+                # Wrapped BUY and SELL sections in a Div with an id 'bot_info'
+                html.Div(id='bot_info', children=[
+                    html.Br(),
+                    html.H4('Start Bot Message:', style={'width': '100%', 'color': 'green'}),
+                    dcc.Textarea(id='buy_textarea', value='', placeholder='Enter Message to Start Bot', style={'width': '100%', 'height': '150px', 'resize': 'none', 'textAlign': 'left', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
+                    html.Br(),
+                    html.H4('Stop Bot Message:', style={'width': '100%', 'color': 'red'}),
+                    dcc.Textarea(id='sell_textarea', value='', placeholder='Enter Message to Stop Bot', style={'width': '100%', 'height': '150px', 'resize': 'none', 'textAlign': 'left', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
+                    html.Br(),
+                    html.Button(id='autotrade_button', className='btn btn-outline-dark', children='Autotrade', n_clicks=0, style={'width': '100%', 'height': '50px', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
+                    html.Br(),
+                    html.Div(id='autotrade_label', children=[html.P('Autotrade is Off', style={'width': '100%', 'color': 'red'})], style={'display': 'block'}),  # Initially set to not display
+                    html.Br(),
+                ], style={'display': 'none'})  # Initially set to not display
+
+
             ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
             html.Div(children=[
                 dcc.Graph( id='ticker_chart', figure=process_chart_pipeline(TICKERS[0])),
@@ -440,4 +456,18 @@ def update_chart(timeframe, ticker, n):
         fig = process_chart_pipeline(ticker)
     table = create_table(ticker)
     return fig, table
+
+# Callback to toggle visibility of the BUY and SELL sections
+@callback(
+    Output('bot_info', 'style'),
+    Input('ticker_dropdown', 'value')
+)
+def toggle_bot_info_visibility(selected_ticker):
+    # Check if the selected ticker is Bitcoin
+    if selected_ticker == 'BTC-USDC':  # Replace with your Bitcoin ticker ID
+        # If Bitcoin is selected, make the sections visible
+        return {'display': 'block'}
+    else:
+        # If another ticker is selected, hide the sections
+        return {'display': 'none'}
 
