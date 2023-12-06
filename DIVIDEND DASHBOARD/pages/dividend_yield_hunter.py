@@ -3,6 +3,7 @@ from dash import html, dcc, Input, Output, callback, dash_table, no_update, Stat
 from dash import callback_context
 import pandas as pd
 from datetime import date, timedelta, datetime
+from files.StockDataFetcher import StockDataFetcher
 import requests
 import yfinance as yf
 from prophet import Prophet
@@ -11,6 +12,9 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv('.env')
+
+############### Object Instantiation ###############
+stock_data_fetcher = StockDataFetcher()
 
 #################### FUNCTIONS ####################
 def fetch_and_filter_dividends(selected_date, api):
@@ -63,19 +67,6 @@ def fetch_and_filter_dividends(selected_date, api):
     ticker_list = df3['ticker'].tolist()
     return ticker_list, df3
 
-# get the data from yahoo finance
-def get_data(symbol):
-    # todo: add a doc string
-    # get data from yahoo finance to use
-    symbol_data = yf.download(symbol, period='max', rounding=True, prepost=True)
-    return symbol_data
-
-# splice the data when povided a date best to do a forecast on 2 years of data
-def splice_data(df, date, query=False, query_on=''):
-    # todo: add a doc string
-    if query:
-        return df.query(f'{query_on} >= "{date}"')
-    return df.loc[date:]    
 
 def forcasting_preparation(df):
     # todo: add a doc string
@@ -114,16 +105,20 @@ dash.register_page(__name__, path='/dividend_yield_hunter', name='Dividend Yield
 layout = html.Div(children=[
     html.Div(children=[
         html.Br(),
-        html.H4('Dividend Yield Hunter', style={'textAlign': 'center', 'margin': 10, 'padding': 0}),
+        html.H4(f'Dividend Yield Hunter {TODAYS_DATE}', style={'textAlign': 'center', 'margin': 10, 'padding': 0}),
         html.Div(children=[
-            dcc.DatePickerSingle(id='user_date', date=date.today(), display_format='YYYY-MM-DD'),
+            dcc.DatePickerSingle(id='user_date', date=TODAYS_DATE, display_format='YYYY-MM-DD'),
         ], style={'margin': 30}),
         html.Div(children=[
             html.Button('Find Dividends', id='find-button', className='btn btn-outline-dark', n_clicks=0, style={'margin': 10}),
             html.Button('Clear Charts', id='clear-button', className='btn btn-outline-danger', n_clicks=0, style={'margin': 10}),
         ], style={'display': 'flex', 'justifyContent': 'left', 'alignItems': 'left', 'flexDirection': 'row', 'margin': 20})
     ]),
-    html.Div(id='container', children=[], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'margin': 20})
+    dcc.Loading(
+        id="loading",
+        type="graph", # This can be "graph", "cube", "circle", "dot", or "default"
+        children=html.Div(id='container', children=[], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'margin': 20})
+    ),
 ])
 
 @callback(
@@ -159,10 +154,10 @@ def update_output(clear_clicks, find_clicks, date):
             buy_list = []
 
             for symbol in ticker_list:
-                data = get_data(symbol)
-                # get date 2 years ago
-                two_years_ago = TODAYS_DATE - timedelta(days=730)
-                data = splice_data(data, two_years_ago)
+                # set the symbol
+                stock_data_fetcher.set_ticker(symbol)
+                # fetch the data
+                data = stock_data_fetcher.fetch_data()
                 forcasting_prep = forcasting_preparation(data)
                 forecast = forecast_data(forcasting_prep)
                 processed_forecast = process_forecasted_data(forecast)

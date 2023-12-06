@@ -1,20 +1,20 @@
 import dash
 import os
 import pickle
-import json
 import requests
 import pandas as pd
 import yfinance as yf
 import plotly.graph_objects as go
 from dash import html, dcc, Input, Output, State, callback, dash_table 
 from plotly.subplots import make_subplots
-from prophet import Prophet
-from datetime import date, timedelta, datetime
+from datetime import date, datetime
 from dotenv import load_dotenv
 from files.TradingBotController import TradingBotController
 from files.StockDataFetcher import StockDataFetcher
 from files.CryptoDataFetcher import CryptoDataFetcher
 from files.MT4DataFetcher import MT4DataFetcher
+from files.ForecastProcessor import ForecastProcessor
+from files.DataProcessor import DataProcessor
 
 load_dotenv('.env')
 
@@ -97,45 +97,6 @@ def splice_data(df, date, query=False, query_on=''):
         return df.query(f'{query_on} >= "{date}"')
     return df.loc[date:]    
 
-def forcasting_preparation(df):
-    # todo: add a doc string
-    df = df.reset_index()
-    return df[['Date', 'Close']]
-        
-# use prophet to forecast the data
-def forecast_data(data, freq='D'):
-    # todo: add a doc string
-    '''Notes for freq Parameter::
-    Can use 'D' for days and 'H' for hours and 'W' for weeks 
-    When using 'W' for weeks, the generated future data points will always fall on the start of the week, regardless of the start date in the history.
-    The 'W' frequency will default to generating dates that fall on a Sunday. However, you can specify a different day of the week by using 'W-MON', 'W-TUE', 'W-WED', etc., to have the weeks start on Monday, Tuesday, Wednesday, and so on. This allows for more flexibility in aligning the generated future data points with the specific weekly cycle of your dataset.'''
-    data = data.rename(columns={'Date': 'ds', 'Close': 'y'})
-    model = Prophet()
-    model.fit(data)
-    future = model.make_future_dataframe(periods=90, freq=freq)
-    forecast = model.predict(future)
-    return forecast
-
-def process_forecasted_data(forecast_df):
-    # todo: add a doc string
-    df = forecast_df.copy()
-    # smooth out the prediction lines
-    df['predicted_price'] = df['yhat'].rolling(window=7).mean()
-    df['upper_band'] = df['yhat_upper'].rolling(window=7).mean()
-    df['lower_band'] = df['yhat_lower'].rolling(window=7).mean()
-    # keep only needed columns in the forecast dataframe
-    df = df[['ds', 'predicted_price', 'lower_band', 'upper_band', 'trend']] 
-    # rename the ds column to Date
-    df = df.rename(columns={'ds': 'Date'})
-    # set the Date column as the index
-    df = df.set_index('Date') 
-    return df
-
-def merge_dataframes(original_data, forecast_data):
-    # merge the forecast dataframe with the original dataframe on the Date index
-    merged_df = pd.merge(original_data, forecast_data, on='Date', how='outer')
-    return merged_df 
-
 def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height=890):
     # todo: add a doc string
 
@@ -205,10 +166,13 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         stock_data_fetcher.set_ticker(symbol)
         # fetch the data
         data = stock_data_fetcher.fetch_data()
-        forcasting_prep = forcasting_preparation(data)
-        forecast = forecast_data(forcasting_prep)
-        processed_forecast = process_forecasted_data(forecast)
-        MERGED_DATA[symbol] = merge_dataframes(data, processed_forecast)
+        # prepare the data for prophet
+        prep_data = DataProcessor.prepare_data_for_prophet(data)
+        # forecast the data 
+        forecast = ForecastProcessor.prophet_forecast(prep_data)
+        processed_forecast = DataProcessor.process_prophet_forecast(forecast)
+        # merge the dataframes 
+        MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(data, processed_forecast)
         # visulize the data 
         fig = plotly_visualize_forecast(symbol, 'Daily', MERGED_DATA[symbol])
         return fig
@@ -219,24 +183,31 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
             print('\nprocessing hourly crypto', symbol)
             # fetch the data
             crypto_df = crypto_data_fetcher.fetch_data(period='1hour')
-            # work through the process
-            forecasting_prep = forcasting_preparation(crypto_df)
-            forecasted_data = forecast_data(forecasting_prep)
-            processed_forecast = process_forecasted_data(forecasted_data)
-            MERGED_DATA[symbol] = merge_dataframes(crypto_df, processed_forecast)
+            # prepare the data for prophet
+            prep_data = DataProcessor.prepare_data_for_prophet(crypto_df)
+            # forecast the data 
+            forecast = ForecastProcessor.prophet_forecast(prep_data, freq='H')
+            # process the forecasted data 
+            processed_forecast = DataProcessor.process_prophet_forecast(forecast)
+            # merge the dataframes
+            MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(crypto_df, processed_forecast) 
             # slice the data to only show the last 291 rows
-            crypto_slice_df = MERGED_DATA[symbol].iloc[-291:len(crypto_df)+3]
+            crypto_slice_df = MERGED_DATA[symbol].iloc[-291:]
             # use plotly_visualize_forecast to plot the data
             fig = plotly_visualize_forecast(symbol, "1hour", crypto_slice_df)
             return fig
         else:
             print('\nprocessing daily crypto', symbol)
             # fetch the data
-            crypto_df = crypto_data_fetcher.fetch_data(period='1hour')# work through the process
-            forecasting_prep = forcasting_preparation(crypto_df)
-            forecasted_data = forecast_data(forecasting_prep)
-            processed_forecast = process_forecasted_data(forecasted_data)
-            MERGED_DATA[symbol] = merge_dataframes(crypto_df, processed_forecast)
+            crypto_df = crypto_data_fetcher.fetch_data(period='1day')
+            # prepare the data for prophet
+            prep_data = DataProcessor.prepare_data_for_prophet(crypto_df)
+            # forecast the data 
+            forecast = ForecastProcessor.prophet_forecast(prep_data)
+            # process the forecasted data 
+            processed_forecast = DataProcessor.process_prophet_forecast(forecast)
+            # merge the dataframes
+            MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(crypto_df, processed_forecast)
             # use plotly_visualize_forecast to plot the data
             fig = plotly_visualize_forecast(symbol, "Daily", MERGED_DATA[symbol])
             return fig   
@@ -246,13 +217,15 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         mt4_data_fetcher.set_symbol(symbol)
         timeframe = 'Daily'
         freq = 'D'
-        original_data = mt4_data_fetcher.fetch_data()
-
-        # work through the process
-        forecasting_prep = forcasting_preparation(original_data)
-        forecasted_data = forecast_data(forecasting_prep, freq=freq)
-        processed_forecast = process_forecasted_data(forecasted_data)
-        MERGED_DATA[symbol] = merge_dataframes(original_data, processed_forecast)
+        mt4_data = mt4_data_fetcher.fetch_data()
+        # prepare the data for prophet
+        prep_data = DataProcessor.prepare_data_for_prophet(mt4_data)
+        # forecast the data 
+        forecast = ForecastProcessor.prophet_forecast(prep_data, freq=freq)
+        # process the forecasted data 
+        processed_forecast = DataProcessor.process_prophet_forecast(forecast)
+        # merge the dataframes
+        MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(mt4_data, processed_forecast)    
         # use plotly_visualize_forecast to plot the data
         fig = plotly_visualize_forecast(symbol, timeframe, MERGED_DATA[symbol])
         return fig
@@ -383,8 +356,9 @@ layout = html.Div(children=[
 
 
             ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
+            
             html.Div(children=[
-                dcc.Graph( id='ticker_chart'),
+                dcc.Graph( id='ticker_chart', figure={}),
                 html.Div(id='div_table', children=[
                 
                 ]),
@@ -424,7 +398,7 @@ def update_chart(timeframe, ticker, n, buy_message, sell_message, store_data):
     table = create_table(ticker)
     # Use store_data to check autotrade status and ticker selection is Bitcoin
     if ticker == 'BTC-USDC' and store_data and store_data.get('autotrade_on'):
-        # get the latest row wher Close is not null
+        # get the latest row where Close is not null
         latest_data = MERGED_DATA[ticker].iloc[-91]
         # Check conditions and print for now
         if latest_data['Close'] < latest_data['lower_band']:
