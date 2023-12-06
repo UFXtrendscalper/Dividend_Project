@@ -15,6 +15,7 @@ from files.CryptoDataFetcher import CryptoDataFetcher
 from files.MT4DataFetcher import MT4DataFetcher
 from files.ForecastProcessor import ForecastProcessor
 from files.DataProcessor import DataProcessor
+from files.DataVisualizer import DataVisualizer
 
 load_dotenv('.env')
 
@@ -97,12 +98,14 @@ def splice_data(df, date, query=False, query_on=''):
         return df.query(f'{query_on} >= "{date}"')
     return df.loc[date:]    
 
-def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height=890):
-    # todo: add a doc string
-
+def getAdjustedSymbolNameForChart(symbol):
     # check if symbol is in the ticker dictionary
     if symbol in TICKER_DICT:
-        symbol = TICKER_DICT[symbol]
+        return TICKER_DICT[symbol]
+    return symbol
+
+def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height=890):
+    # todo: add a doc string
     #  get timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d @ %H:%M:%S")
 
@@ -158,7 +161,7 @@ def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height
     return fig
 
 def process_chart_pipeline(symbol, show_hourly_chart=False):
-    # todo add an if statement for forex pairs to use alphavantage api  
+    # todo add an if statement for forex pairs to use alphavantage api
     print('\n\nprocessing chart pipeline', symbol)
     if symbol not in CRYPTO_TICKERS and symbol not in MT4_SYMBOLS:
         print('\nprocessing daily stock', symbol)
@@ -173,8 +176,12 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         processed_forecast = DataProcessor.process_prophet_forecast(forecast)
         # merge the dataframes 
         MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(data, processed_forecast)
-        # visulize the data 
-        fig = plotly_visualize_forecast(symbol, 'Daily', MERGED_DATA[symbol])
+        # get the symbol name for the chart
+        chart_symbol_title = getAdjustedSymbolNameForChart(symbol)
+        # create a datavisualizer object
+        dv = DataVisualizer(MERGED_DATA[symbol], chart_symbol_title, timeframe = 'Daily')
+        # create the candlestick chart
+        fig = dv.create_candlestick_chart()
         return fig
     elif symbol in CRYPTO_TICKERS:
         # set the symbol
@@ -193,8 +200,12 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
             MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(crypto_df, processed_forecast) 
             # slice the data to only show the last 291 rows
             crypto_slice_df = MERGED_DATA[symbol].iloc[-291:]
-            # use plotly_visualize_forecast to plot the data
-            fig = plotly_visualize_forecast(symbol, "1hour", crypto_slice_df)
+            # get the symbol name for the chart
+            chart_symbol_title = getAdjustedSymbolNameForChart(symbol)
+            # create a datavisualizer object
+            dv = DataVisualizer(crypto_slice_df, chart_symbol_title, timeframe = '1hour')
+            # create the candlestick chart
+            fig = dv.create_candlestick_chart()
             return fig
         else:
             print('\nprocessing daily crypto', symbol)
@@ -208,8 +219,12 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
             processed_forecast = DataProcessor.process_prophet_forecast(forecast)
             # merge the dataframes
             MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(crypto_df, processed_forecast)
-            # use plotly_visualize_forecast to plot the data
-            fig = plotly_visualize_forecast(symbol, "Daily", MERGED_DATA[symbol])
+            # get the symbol name for the chart
+            chart_symbol_title = getAdjustedSymbolNameForChart(symbol)
+            # create a datavisualizer object
+            dv = DataVisualizer(MERGED_DATA[symbol], chart_symbol_title, timeframe = 'Daily')
+            # create the candlestick chart
+            fig = dv.create_candlestick_chart()
             return fig   
     elif symbol in MT4_SYMBOLS:
         print('\nprocessing mt4', symbol)
@@ -225,9 +240,13 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         # process the forecasted data 
         processed_forecast = DataProcessor.process_prophet_forecast(forecast)
         # merge the dataframes
-        MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(mt4_data, processed_forecast)    
-        # use plotly_visualize_forecast to plot the data
-        fig = plotly_visualize_forecast(symbol, timeframe, MERGED_DATA[symbol])
+        MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(mt4_data, processed_forecast)
+        # get the symbol name for the chart
+        chart_symbol_title = getAdjustedSymbolNameForChart(symbol)
+        # create a datavisualizer object
+        dv = DataVisualizer(MERGED_DATA[symbol], chart_symbol_title, timeframe)
+        # create the candlestick chart
+        fig = dv.create_candlestick_chart()
         return fig
         
 
