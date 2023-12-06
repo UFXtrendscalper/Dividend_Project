@@ -324,56 +324,55 @@ layout = html.Div(children=[
             dcc.Graph(figure=create_indices_charts()),
         ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%'}),
         html.Hr(style={'color': 'white'}),
-        html.Div([
+        dcc.Loading(id='loading_chart', children=[
             html.Div([
-                html.H4('Select TimeFrame:', style={'width': '100%'}),
-                dcc.Dropdown(id='timeframe_dropdown', 
-                            options=[{'label': 'Daily', 'value': 'Daily'}, {'label': 'Hourly', 'value': 'Hourly'}],
-                            value='Daily', clearable=False, persistence=True, persisted_props=['value'], 
-                            persistence_type='local'
-                            ),
-                html.Br(),            
-                html.H4('Select Ticker:', style={'width': '100%'}),
-                dcc.Dropdown(id='ticker_dropdown', 
-                            options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
-                            value=TICKERS[0], clearable=False, persistence=True, persisted_props=['value'], persistence_type='local'
-                            ),
+                html.Div([
+                    html.H4('Select TimeFrame:', style={'width': '100%'}),
+                    dcc.Dropdown(id='timeframe_dropdown', 
+                                options=[{'label': 'Daily', 'value': 'Daily'}, {'label': 'Hourly', 'value': 'Hourly'}],
+                                value='Daily', clearable=False, persistence=True, persisted_props=['value'], 
+                                persistence_type='local'
+                                ),
+                    html.Br(),            
+                    html.H4('Select Ticker:', style={'width': '100%'}),
+                    dcc.Dropdown(id='ticker_dropdown', 
+                                options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
+                                value=TICKERS[0], clearable=False, persistence=True, persisted_props=['value'], persistence_type='local'
+                                ),
+                    
+                    # Wrapped BUY and SELL sections in a Div with an id 'bot_info'
+                    html.Div(id='bot_info', children=[
+                        html.Br(),
+                        html.H4('Start Bot Message:', style={'width': '100%', 'color': 'green'}),
+                        dcc.Textarea(id='buy_textarea', value='', placeholder='Enter Message to Start Bot', style={'width': '100%', 'height': '150px', 'resize': 'none', 'textAlign': 'left', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
+                        html.Br(),
+                        html.H4('Stop Bot Message:', style={'width': '100%', 'color': 'red'}),
+                        dcc.Textarea(id='sell_textarea', value='', placeholder='Enter Message to Stop Bot', style={'width': '100%', 'height': '150px', 'resize': 'none', 'textAlign': 'left', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
+                        html.Br(),
+                        html.Button(id='autotrade_button', className='btn btn-outline-dark', children='Autotrade', n_clicks=0, style={'width': '100%', 'height': '50px', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
+                        html.Br(),
+                        html.Div(id='autotrade_label', children=[html.P('Autotrade is Off', style={'width': '100%', 'color': 'red'})], style={'display': 'block'}),  # Initially set to not display
+                        html.Br(),
+                    ], style={'display': 'none'})  # Initially set to not display
+
+
+                ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
                 
-                # Wrapped BUY and SELL sections in a Div with an id 'bot_info'
-                html.Div(id='bot_info', children=[
-                    html.Br(),
-                    html.H4('Start Bot Message:', style={'width': '100%', 'color': 'green'}),
-                    dcc.Textarea(id='buy_textarea', value='', placeholder='Enter Message to Start Bot', style={'width': '100%', 'height': '150px', 'resize': 'none', 'textAlign': 'left', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
-                    html.Br(),
-                    html.H4('Stop Bot Message:', style={'width': '100%', 'color': 'red'}),
-                    dcc.Textarea(id='sell_textarea', value='', placeholder='Enter Message to Stop Bot', style={'width': '100%', 'height': '150px', 'resize': 'none', 'textAlign': 'left', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
-                    html.Br(),
-                    html.Button(id='autotrade_button', className='btn btn-outline-dark', children='Autotrade', n_clicks=0, style={'width': '100%', 'height': '50px', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
-                    html.Br(),
-                    html.Div(id='autotrade_label', children=[html.P('Autotrade is Off', style={'width': '100%', 'color': 'red'})], style={'display': 'block'}),  # Initially set to not display
-                    html.Br(),
-                ], style={'display': 'none'})  # Initially set to not display
-
-
-            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
+                html.Div(children=[
+                                dcc.Graph( id='ticker_chart', figure={}),
+                                html.Div(id='div_table', children=[
+                                ]),
+                        ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%', 'marginBottom': '10px', 'padding' : '10px'}),
+                
+            ], style={'width': '100%', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'left', 'alignItems': 'left', 'flexDirection': 'row'}),
             
-            html.Div(children=[
-                dcc.Graph( id='ticker_chart', figure={}),
-                html.Div(id='div_table', children=[
-                
-                ]),
-            ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%', 'marginBottom': '10px', 'padding' : '10px'}),
-        
-
-        ], style={'width': '100%', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'left', 'alignItems': 'left', 'flexDirection': 'row'}),
-        
+        ], type='circle', fullscreen=False), # Loading component ends here
         dcc.Interval(
             id='interval-component',
             interval=15*60*1000, # in milliseconds = will update every 15 minutes
             n_intervals=0
         ), 
         dcc.Store(id='autotrade_store', storage_type='local')
-
         
 ])
 
