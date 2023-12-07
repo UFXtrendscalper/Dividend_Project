@@ -7,7 +7,7 @@ import yfinance as yf
 import plotly.graph_objects as go
 from dash import html, dcc, Input, Output, State, callback, dash_table 
 from plotly.subplots import make_subplots
-from datetime import date, datetime
+from datetime import date
 from dotenv import load_dotenv
 from files.TradingBotController import TradingBotController
 from files.StockDataFetcher import StockDataFetcher
@@ -24,7 +24,6 @@ bot_controller = TradingBotController()
 stock_data_fetcher = StockDataFetcher()
 crypto_data_fetcher = CryptoDataFetcher()
 mt4_data_fetcher = MT4DataFetcher()
-
 #################### FUNCTIONS ####################
 def create_indices_charts(): 
     # end def    # Download the data from yahoo finance
@@ -92,12 +91,14 @@ def load_and_combine_tickers(CRYPTO_TICKERS, MT4_TICKERS, ETF_TICKERS):
     return tickers
 
 # splice the data when povided a date best to do a forecast on 2 years of data
-def splice_data(df, date, query=False, query_on=''):
+def splice_data(df, num_bars):
     # todo: add a doc string
-    if query:
-        return df.query(f'{query_on} >= "{date}"')
-    return df.loc[date:]    
-
+    # return th complete dataframe if num_bars is 0
+    if num_bars >= 700:
+        return df
+    else:
+        return df.tail(num_bars + 90) # add 90 to account for the 90 day forecast
+    
 def getAdjustedSymbolNameForChart(symbol):
     # check if symbol is in the ticker dictionary
     if symbol in TICKER_DICT:
@@ -105,7 +106,7 @@ def getAdjustedSymbolNameForChart(symbol):
     return symbol
 
 
-def process_chart_pipeline(symbol, show_hourly_chart=False):
+def process_chart_pipeline(symbol, num_bars, show_hourly_chart=False):
     # todo add an if statement for forex pairs to use alphavantage api
     print('\n\nprocessing chart pipeline', symbol)
     if symbol not in CRYPTO_TICKERS and symbol not in MT4_SYMBOLS:
@@ -121,10 +122,12 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         processed_forecast = DataProcessor.process_prophet_forecast(forecast)
         # merge the dataframes 
         MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(data, processed_forecast)
+        # slice the merged data using the num_bars as a percentage
+        stock_slice_df = splice_data(MERGED_DATA[symbol], num_bars)
         # get the symbol name for the chart
         chart_symbol_title = getAdjustedSymbolNameForChart(symbol)
         # create a datavisualizer object
-        dv = DataVisualizer(MERGED_DATA[symbol], chart_symbol_title, timeframe = 'Daily')
+        dv = DataVisualizer(stock_slice_df, chart_symbol_title, timeframe = 'Daily')
         # create the candlestick chart
         fig = dv.create_candlestick_chart()
         return fig
@@ -164,10 +167,12 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
             processed_forecast = DataProcessor.process_prophet_forecast(forecast)
             # merge the dataframes
             MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(crypto_df, processed_forecast)
+            # slice the merged data using the num_bars as a percentage
+            crypto_slice_df = splice_data(MERGED_DATA[symbol], num_bars)
             # get the symbol name for the chart
             chart_symbol_title = getAdjustedSymbolNameForChart(symbol)
             # create a datavisualizer object
-            dv = DataVisualizer(MERGED_DATA[symbol], chart_symbol_title, timeframe = 'Daily')
+            dv = DataVisualizer(crypto_slice_df, chart_symbol_title, timeframe = 'Daily')
             # create the candlestick chart
             fig = dv.create_candlestick_chart()
             return fig   
@@ -186,10 +191,12 @@ def process_chart_pipeline(symbol, show_hourly_chart=False):
         processed_forecast = DataProcessor.process_prophet_forecast(forecast)
         # merge the dataframes
         MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(mt4_data, processed_forecast)
+        # slice the merged data using the num_bars as a percentage
+        mt4_slice_df = splice_data(MERGED_DATA[symbol], num_bars)
         # get the symbol name for the chart
         chart_symbol_title = getAdjustedSymbolNameForChart(symbol)
         # create a datavisualizer object
-        dv = DataVisualizer(MERGED_DATA[symbol], chart_symbol_title, timeframe)
+        dv = DataVisualizer(mt4_slice_df, chart_symbol_title, timeframe)
         # create the candlestick chart
         fig = dv.create_candlestick_chart()
         return fig
@@ -303,7 +310,17 @@ layout = html.Div(children=[
                                 options=[{'label': TICKER_DICT[ticker], 'value': ticker} if ticker in TICKER_DICT else {'label': ticker, 'value': ticker} for ticker in TICKERS],
                                 value=TICKERS[0], clearable=False, persistence=True, persisted_props=['value'], persistence_type='local'
                                 ),
-                    
+                    html.Br(),
+                    html.H4('Select # of Bars:', style={'width': '100%'}),
+                    dcc.Slider(
+                        id='bar_slider',
+                        min=100,  # Minimum number of bars
+                        max=700,  # Maximum number of bars
+                        value=700,  # Default value
+                        marks={i: str(i) for i in range(100, 701, 50)},  # Marks on the slider
+                        step=50  # Step size
+                        ), 
+
                     # Wrapped BUY and SELL sections in a Div with an id 'bot_info'
                     html.Div(id='bot_info', children=[
                         html.Br(),
@@ -325,7 +342,7 @@ layout = html.Div(children=[
                 ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row', 'width': '100%', 'padding': '10px 40px 10px 40px', 'display': 'inline-block'}),
                 
                 html.Div(children=[
-                                dcc.Graph( id='ticker_chart', figure={}),
+                                dcc.Graph( id='ticker_chart', figure=go.Figure()),
                                 html.Div(id='div_table', children=[
                                 ]),
                         ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'width': '100%', 'marginBottom': '10px', 'padding' : '10px'}),
@@ -348,18 +365,19 @@ layout = html.Div(children=[
     Output('div_table', 'children'),
     Input('timeframe_dropdown', 'value'),
     Input('ticker_dropdown', 'value'),
+    Input('bar_slider', 'value'),  # Add the slider as an input
     Input('interval-component', 'n_intervals'),
     Input('buy_textarea', 'value'),
     Input('sell_textarea', 'value'),
     State('autotrade_store', 'data'),  # Access store_data as State
     # do not run the callback if the ticker is not changed
-    prevent_initial_call=False
+    prevent_initial_call=True
     )
-def update_chart(timeframe, ticker, n, buy_message, sell_message, store_data):
+def update_chart(timeframe, ticker, num_bars, n, buy_message, sell_message, store_data):
     if timeframe == 'Hourly':
-        fig = process_chart_pipeline(ticker, show_hourly_chart=True)
+        new_fig = process_chart_pipeline(ticker, num_bars, show_hourly_chart=True)
     else:
-        fig = process_chart_pipeline(ticker)
+        new_fig = process_chart_pipeline(ticker, num_bars)
     table = create_table(ticker)
     # Use store_data to check autotrade status and ticker selection is Bitcoin
     if ticker == 'BTC-USDC' and store_data and store_data.get('autotrade_on'):
@@ -374,8 +392,7 @@ def update_chart(timeframe, ticker, n, buy_message, sell_message, store_data):
             print(f"BTC-USDC Close price is above the upper band: {latest_data['Close']}")
             # Implement sell logic here
             bot_controller.stop_bot(sell_message)
-    
-    return fig, table
+    return new_fig, table
 
 # Callback to toggle visibility of the BUY and SELL sections
 @callback(
