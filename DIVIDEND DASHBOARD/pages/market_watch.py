@@ -104,61 +104,6 @@ def getAdjustedSymbolNameForChart(symbol):
         return TICKER_DICT[symbol]
     return symbol
 
-def plotly_visualize_forecast(symbol, timeframe, merged_data, width=1500, height=890):
-    # todo: add a doc string
-    #  get timestamp
-    timestamp = datetime.now().strftime("%Y-%m-%d @ %H:%M:%S")
-
-    # create the date buttons
-    if timeframe == 'Daily':
-        date_buttons = [{'count': 15, 'label': '1Y', 'step': "month", 'stepmode': "todate"},
-                        {'count': 9, 'label': '6M', 'step': "month", 'stepmode': "todate"},
-                        {'count': 6, 'label': '3M', 'step': "month", 'stepmode': "todate"},
-                        {'count': 4, 'label': '1M', 'step': "month", 'stepmode': "todate"}, 
-                        {'step': "all"}]
-    # create the plotly chart
-    fig = go.Figure()
-    fig.data = []
-    fig.add_trace(go.Candlestick(x=merged_data.index, open=merged_data.Open, high=merged_data.High, low=merged_data.Low, close=merged_data.Close, name='Candlestick', increasing_line_color='#F6FEFF', decreasing_line_color='#1CBDFB'))
-    
-    if timeframe == 'Daily':
-        # update the layout of the chart with the buttons
-        fig.update_layout(  
-            {'xaxis':
-                {'rangeselector': {'buttons': date_buttons, 
-                                    'bgcolor': '#444654', 
-                                    'activecolor': '#1E82CD',
-                                    'bordercolor': '#444654',
-                                    'font': {'color': 'white'}}
-                }
-            },
-        )
-
-    fig.update_layout(
-        width=width, height=height, xaxis_rangeslider_visible=False, 
-        paper_bgcolor='#202123', plot_bgcolor='#202123', font=dict(color='white', size=12),
-        font_size=14, font_family="Rockwell", title_font_family="Rockwell", title_font_size=24
-    )
-    
-    #  update the layout of the chart with the title and axis labels
-    fig.update_layout( 
-        {'annotations': [{  "text": f"This graph was last generated on {timestamp}", 
-                            "showarrow": False, "x": 0.55, "y": 1.05, "xref": "paper", "yref": "paper"}]},
-    )
-
-    fig.update_layout( 
-        {'title': {'text':f'{symbol} {timeframe} Chart', 'x': 0.5, 'y': 0.95}},
-        yaxis=dict(title='', gridcolor='#444654'), xaxis=dict(gridcolor='#444654')
-    )
-    # Update y-axes to include dollar sign
-    fig.update_yaxes(tickprefix="$")
-    
-    # add the predicted price and trend lines to the chart
-    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.predicted_price, line=dict(color='#B111D6', width=1), name='Predicted Price'))
-    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.trend, line=dict(color='#0074BA', width=1), name='Predicted Trend'))
-    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.upper_band, line=dict(color='#1E82CD', width=2), name='upper_band'))
-    fig.add_trace(go.Scatter(x=merged_data.index, y=merged_data.lower_band, line=dict(color='#1E82CD', width=2), name='lower_band'))
-    return fig
 
 def process_chart_pipeline(symbol, show_hourly_chart=False):
     # todo add an if statement for forex pairs to use alphavantage api
@@ -370,7 +315,9 @@ layout = html.Div(children=[
                         html.Br(),
                         html.Button(id='autotrade_button', className='btn btn-outline-dark', children='Autotrade', n_clicks=0, style={'width': '100%', 'height': '50px', 'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column'}),
                         html.Br(),
-                        html.Div(id='autotrade_label', children=[html.P('Autotrade is Off', style={'width': '100%', 'color': 'red'})], style={'display': 'block'}),  # Initially set to not display
+                        html.Div(id='autotrade_label', children=[
+
+                        ], style={'display': 'block'}),  # Initially set to not display
                         html.Br(),
                     ], style={'display': 'none'})  # Initially set to not display
 
@@ -495,4 +442,4 @@ def toggle_autotrade(n_clicks, buy_message, sell_message, store_data):
         # SAVE THE BUY AND SELL MESSAGES TO A PICKLE FILE
         with open('data/trade_messages.pickle', 'wb') as file:
             pickle.dump(trade_messages, file)
-        return label, store_data
+    return label, store_data
