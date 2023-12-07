@@ -37,18 +37,17 @@ class DataProcessor:
         DataFrame: A DataFrame with smoothed predicted prices, upper and lower confidence bands, 
                    and the trend, indexed by date.
         """
-        df = forecast_df.copy()
         # smooth out the prediction lines
-        df['predicted_price'] = df['yhat'].rolling(window=7).mean()
-        df['upper_band'] = df['yhat_upper'].rolling(window=7).mean()
-        df['lower_band'] = df['yhat_lower'].rolling(window=7).mean()
+        forecast_df['predicted_price'] = forecast_df['yhat'].rolling(window=7).mean()
+        forecast_df['upper_band'] = forecast_df['yhat_upper'].rolling(window=7).mean()
+        forecast_df['lower_band'] = forecast_df['yhat_lower'].rolling(window=7).mean()
         # keep only needed columns in the forecast dataframe
-        df = df[['ds', 'predicted_price', 'lower_band', 'upper_band', 'trend']] 
+        forecast_df = forecast_df[['ds', 'predicted_price', 'lower_band', 'upper_band', 'trend']] 
         # rename the ds column to Date
-        df = df.rename(columns={'ds': 'Date'})
+        forecast_df = forecast_df.rename(columns={'ds': 'Date'})
         # set the Date column as the index
-        df = df.set_index('Date') 
-        return df
+        forecast_df = forecast_df.set_index('Date') 
+        return forecast_df
 
     @staticmethod
     def merge_dataframes_for_prophet(original_data, forecast_data):

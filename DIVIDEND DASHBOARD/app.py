@@ -12,7 +12,7 @@ app = dash.Dash(__name__, pages_folder='pages', use_pages=True , external_styles
 app.layout = html.Div([
     # html.Br(),
     html.Div([
-        html.H1('DIVIDEND DASHBOARD', style={'textAlign': 'center', 'color': 'white', 'margin': 20, 'padding': 0, 'font-family': 'Rockwell, serif'}),
+        html.H1('DIVIDEND DASHBOARD', style={'textAlign': 'center', 'color': 'white', 'margin': 20, 'padding': 0, 'fontFamily': 'Rockwell, serif'}),
         html.Img(src=app.get_asset_url('images/dividend_logo.png'), style={'width':'7%'}),
     ], style={'textAlign': 'center', 'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'row'}
     ),
