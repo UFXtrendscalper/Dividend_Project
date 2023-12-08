@@ -119,7 +119,8 @@ def splice_data(df, num_bars):
     if num_bars >= 700:
         return df
     else:
-        return df.tail(num_bars + 90) # add 90 to account for the 90 day forecast
+        data = df.copy()
+        return data.tail(num_bars + 90) # add 90 to account for the 90 day forecast
     
 def getAdjustedSymbolNameForChart(symbol):
     # check if symbol is in the ticker dictionary
@@ -127,7 +128,7 @@ def getAdjustedSymbolNameForChart(symbol):
         return TICKER_DICT[symbol]
     return symbol
 
-def process_stock_data(symbol, num_bars):
+def process_stock_data(symbol):
     print('\nprocessing daily stock', symbol)
     # set the ticker
     stock_data_fetcher.set_ticker(symbol)
@@ -141,10 +142,10 @@ def process_stock_data(symbol, num_bars):
     # merge the dataframes 
     MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(data, processed_forecast)
     # slice the merged data using the num_bars as a percentage
-    stock_slice_df = splice_data(MERGED_DATA[symbol], num_bars)
+    stock_slice_df = splice_data(MERGED_DATA[symbol], 100)
     return create_chart_figure(stock_slice_df, symbol, 'Daily')
 
-def process_crypto_data(symbol, num_bars, timeframe):
+def process_crypto_data(symbol, timeframe):
     print(f'\nprocessing {timeframe} crypto', symbol)
     # Choose the appropriate period based on the timeframe
     period = '1hour' if timeframe == '1hour' else '1day'
@@ -166,10 +167,10 @@ def process_crypto_data(symbol, num_bars, timeframe):
         crypto_slice_df = MERGED_DATA[symbol].iloc[-291:]
     else:
         # For daily data, use splice_data function
-        crypto_slice_df = splice_data(MERGED_DATA[symbol], num_bars)
+        crypto_slice_df = splice_data(MERGED_DATA[symbol], 100)
     return create_chart_figure(crypto_slice_df, symbol, timeframe)
 
-def process_mt4_data(symbol, num_bars):
+def process_mt4_data(symbol):
     print('\nprocessing mt4', symbol)
     # set the symbol
     mt4_data_fetcher.set_symbol(symbol)
@@ -185,7 +186,7 @@ def process_mt4_data(symbol, num_bars):
     # merge the dataframes
     MERGED_DATA[symbol] = DataProcessor.merge_dataframes_for_prophet(mt4_data, processed_forecast)
     # slice the merged data using the num_bars as a percentage
-    mt4_slice_df = splice_data(MERGED_DATA[symbol], num_bars)
+    mt4_slice_df = splice_data(MERGED_DATA[symbol], 100)
     return create_chart_figure(mt4_slice_df, symbol, timeframe)
 
 def create_chart_figure(data_slice, symbol, timeframe):
@@ -193,14 +194,14 @@ def create_chart_figure(data_slice, symbol, timeframe):
     fig = DataVisualizer.create_candlestick_chart(data_slice, chart_symbol_title, timeframe)
     return fig
 
-def process_chart_pipeline(symbol, num_bars, show_hourly_chart=False):
+def process_chart_pipeline(symbol, show_hourly_chart=False):
     if symbol in CRYPTO_TICKERS:
         timeframe = '1hour' if show_hourly_chart else '1day'
-        return process_crypto_data(symbol, num_bars, timeframe)
+        return process_crypto_data(symbol, timeframe)
     elif symbol in MT4_SYMBOLS:
-        return process_mt4_data(symbol, num_bars)
+        return process_mt4_data(symbol)
     else:
-        return process_stock_data(symbol, num_bars)
+        return process_stock_data(symbol)
         
 
 def fetch_dividend_data(ticker, api_key):
@@ -319,16 +320,7 @@ layout = html.Div(children=[
                                 persistence_type='local'
                                 ),
                     html.Br(),            
-                    html.H4('Select # of Bars:', style={'width': '100%'}),
-                    dcc.Slider(
-                        id='bar_slider',
-                        min=100,  # Minimum number of bars
-                        max=700,  # Maximum number of bars
-                        value=700,  # Default value
-                        marks={i: str(i) for i in range(100, 701, 50)},  # Marks on the slider
-                        step=50  # Step size
-                        ), 
-
+                    
                     # Wrapped BUY and SELL sections in a Div with an id 'bot_info'
                     html.Div(id='bot_info', children=[
                         html.Br(),
@@ -374,7 +366,6 @@ layout = html.Div(children=[
     Output('div_table', 'style'),
     Input('timeframe_dropdown', 'value'),
     Input('ticker_dropdown', 'value'),
-    Input('bar_slider', 'value'),  # Add the slider as an input
     Input('buy_textarea', 'value'),
     Input('sell_textarea', 'value'),
     State('autotrade_store', 'data'),  # Access store_data as State
@@ -382,9 +373,9 @@ layout = html.Div(children=[
     # do not run the callback if the ticker is not changed
     prevent_initial_call=False
     )
-def update_chart(timeframe, ticker, num_bars, buy_message, sell_message, store_data, n):
+def update_chart(timeframe, ticker, buy_message, sell_message, store_data, n):
     show_hourly_chart = True if timeframe == 'Hourly' else False
-    new_fig = process_chart_pipeline(ticker, num_bars, show_hourly_chart=show_hourly_chart)
+    new_fig = process_chart_pipeline(ticker, show_hourly_chart=show_hourly_chart)
     # Use store_data to check autotrade status and ticker selection is Bitcoin
     if ticker == 'BTC-USDC' and store_data and store_data.get('autotrade_on'):
         # get the latest row where Close is not null
