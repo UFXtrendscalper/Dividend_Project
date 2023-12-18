@@ -382,11 +382,11 @@ def update_chart(timeframe, ticker, buy_message, sell_message, store_data, n):
         latest_data = MERGED_DATA[ticker].iloc[-91]
         # Check conditions and print for now
         if latest_data['Close'] < latest_data['lower_band']:
-            print(f"BTC-USDC Close price is below the lower band: {latest_data['Close']}")
+            print(f"BTC-USDC Close price is below the lower band: {latest_data['Close']} < {latest_data['lower_band']}")
             # Implement buy logic here
             bot_controller.start_bot(buy_message)
         elif latest_data['Close'] > latest_data['upper_band']:
-            print(f"BTC-USDC Close price is above the upper band: {latest_data['Close']}")
+            print(f"BTC-USDC Close price is above the upper band: {latest_data['Close']} > {latest_data['upper_band']}")
             # Implement sell logic here
             bot_controller.stop_bot(sell_message)
     # show if ticker is not i crypto or mt4

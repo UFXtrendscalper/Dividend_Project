@@ -12,7 +12,6 @@ class DataVisualizer:
         """
         # Initialize a new figure instead of adding to self.fig
         fig = go.Figure()
-
         # clear the figure
         fig.data = []
         # clear the layout
