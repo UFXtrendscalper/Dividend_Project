@@ -10,6 +10,7 @@ from prophet import Prophet
 import plotly.graph_objects as go
 import os
 from dotenv import load_dotenv
+from scipy.signal import savgol_filter
 
 load_dotenv('.env')
 
@@ -87,10 +88,10 @@ def process_forecasted_data(forecast_df):
     df = forecast_df.copy()
     # keep only needed columns in the forecast dataframe
     df = df[['ds', 'yhat', 'yhat_lower', 'yhat_upper', 'trend']]  
-    # smooth out the prediction lines
-    df['predicted_price'] = df['yhat'].rolling(window=7).mean()
-    df['upper_band'] = df['yhat_upper'].rolling(window=7).mean()
-    df['lower_band'] = df['yhat_lower'].rolling(window=7).mean()
+    # use savgol_filter
+    df['predicted_price'] = savgol_filter(df['yhat'], window_length=31, polyorder=2) 
+    df['upper_band'] = savgol_filter(df['yhat_upper'], window_length=31, polyorder=2)
+    df['lower_band'] = savgol_filter(df['yhat_lower'], window_length=31, polyorder=2)
     return df 
 
 #################### CONSTANTS ####################

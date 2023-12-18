@@ -1,4 +1,5 @@
 import pandas as pd
+from scipy.signal import savgol_filter
 
 class DataProcessor:
     @staticmethod
@@ -37,10 +38,11 @@ class DataProcessor:
         DataFrame: A DataFrame with smoothed predicted prices, upper and lower confidence bands, 
                    and the trend, indexed by date.
         """
-        # smooth out the prediction lines
-        forecast_df['predicted_price'] = forecast_df['yhat'].rolling(window=7).mean()
-        forecast_df['upper_band'] = forecast_df['yhat_upper'].rolling(window=7).mean()
-        forecast_df['lower_band'] = forecast_df['yhat_lower'].rolling(window=7).mean()
+        # use savgol_filter
+        forecast_df['predicted_price'] = savgol_filter(forecast_df['yhat'], window_length=31, polyorder=2) 
+        forecast_df['upper_band'] = savgol_filter(forecast_df['yhat_upper'], window_length=31, polyorder=2)
+        forecast_df['lower_band'] = savgol_filter(forecast_df['yhat_lower'], window_length=31, polyorder=2)
+
         # keep only needed columns in the forecast dataframe
         forecast_df = forecast_df[['ds', 'predicted_price', 'lower_band', 'upper_band', 'trend']] 
         # rename the ds column to Date
