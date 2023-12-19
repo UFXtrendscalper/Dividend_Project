@@ -2,17 +2,28 @@ import dash
 from dash import html, dcc, Input, Output, callback, dash_table, no_update, State
 from dash import callback_context
 import pandas as pd
-from datetime import date, timedelta, datetime
+
+from datetime import date, timedelta, datetime, date
 from files.StockDataFetcher import StockDataFetcher
 import requests
 import yfinance as yf
 from prophet import Prophet
 import plotly.graph_objects as go
+import plotly.express as px
 import os
 from dotenv import load_dotenv
 from scipy.signal import savgol_filter
 
+
 load_dotenv('.env')
+
+#################### CONSTANTS ####################
+TODAYS_DATE = date.today()
+MONEY_FORMAT = dash_table.FormatTemplate.money(2)
+DECIMAL_FORMAT = dash_table.FormatTemplate.Format(precision=2, symbol_suffix='%')
+POLYGON_API = os.environ.get('POLYGON_IO_API')
+
+dash.register_page(__name__, path='/dividend_yield_hunter', name='Dividend Yield Hunter 🏹')
 
 ############### Object Instantiation ###############
 stock_data_fetcher = StockDataFetcher()
@@ -68,13 +79,11 @@ def fetch_and_filter_dividends(selected_date, api):
     ticker_list = df3['ticker'].tolist()
     return ticker_list, df3
 
-
 def forcasting_preparation(df):
     # todo: add a doc string
     df = df.reset_index()
     return df[['Date', 'Close']]
         
-# use prophet to forecast the data
 def forecast_data(data):
     # todo: add a doc string
     data = data.rename(columns={'Date': 'ds', 'Close': 'y'})
@@ -94,13 +103,51 @@ def process_forecasted_data(forecast_df):
     df['lower_band'] = savgol_filter(df['yhat_lower'], window_length=31, polyorder=2)
     return df 
 
-#################### CONSTANTS ####################
-TODAYS_DATE = date.today()
-MONEY_FORMAT = dash_table.FormatTemplate.money(2)
-DECIMAL_FORMAT = dash_table.FormatTemplate.Format(precision=2, symbol_suffix='%')
-POLYGON_API = os.environ.get('POLYGON_IO_API')
+def get_upcoming_ex_dividends(api_key):
+    """
+    Fetches and plots the upcoming ex-dividend dates for the current month.
 
-dash.register_page(__name__, path='/dividend_yield_hunter', name='Dividend Yield Hunter 🏹')
+    Parameters:
+    api_key (str): API key for accessing the data source.
+
+    Returns:
+    plotly.graph_objs._figure.Figure: A bar plot of the upcoming ex-dividend dates.
+    """
+
+    # Get today's date
+    today = date.today()
+    # Calculate tomorrow's date
+    tomorrow = today + timedelta(days=1)
+    # Calculate the end of the current month
+    end_of_month = today.replace(day=28) + timedelta(days=4)
+
+    # Define the API endpoint with parameters for the date range
+    api_url = f"https://api.polygon.io/v3/reference/dividends?ex_dividend_date.gt={tomorrow}&ex_dividend_date.lt={end_of_month}&limit=1000&apiKey={api_key}"
+
+    # Send GET request to the API
+    response = requests.get(api_url)
+    # Convert the response to JSON
+    data = response.json()
+
+    # Create a DataFrame from the API response
+    df = pd.DataFrame(data['results'])
+    # Sort DataFrame by the ex-dividend date
+    df.sort_values(by=['ex_dividend_date'], inplace=True)
+
+    # Group by ex_dividend_date and count the number of stocks for each date
+    stocks_per_date = df.groupby(['ex_dividend_date']).size()
+
+    # Get the current month's name for the plot title
+    current_month = datetime.now().strftime("%B")
+
+    # Create a bar plot with the grouped data
+    fig = px.bar(stocks_per_date, title=f'Upcoming Ex-Dividends for {current_month}')
+    # Update plot labels
+    fig.update_layout(xaxis_title='Ex-Dividend Date', yaxis_title='Number of Stocks', showlegend=False, width=1200, height=500, paper_bgcolor='#202123', plot_bgcolor='#202123', font=dict(color='white', size=12), font_size=14, font_family="Rockwell", title_font_family="Rockwell", title_font_size=24) 
+    # Customize hover data
+    fig.update_traces(hovertemplate='Ex-Dividend Date: %{x}<br>Number of Stocks: %{y}')
+
+    return fig
 
 #################### PAGE LAYOUT ####################
 layout = html.Div(children=[
@@ -115,10 +162,20 @@ layout = html.Div(children=[
             html.Button('Clear Charts', id='clear-button', className='btn btn-outline-danger', n_clicks=0, style={'margin': 10}),
         ], style={'display': 'flex', 'justifyContent': 'left', 'alignItems': 'left', 'flexDirection': 'row', 'margin': 20})
     ]),
+    # html.Div(id='Upcoming_exDividend_chart_container', children=[
+    #     # insert a dcc.graph here
+    #     dcc.Loading(
+    #         id="circle",
+    #         type="graph", # This can be "graph", "cube", "circle", "dot", or "default"
+    #         children=dcc.Graph(id='Upcoming_exDividend_chart', figure=get_upcoming_ex_dividends(POLYGON_API))
+    #     )
+    # ], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'margin': 20}),
     dcc.Loading(
         id="loading",
         type="graph", # This can be "graph", "cube", "circle", "dot", or "default"
-        children=html.Div(id='container', children=[], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'margin': 20})
+        children=html.Div(id='container', children=[
+            dcc.Graph(id='Upcoming_exDividend_chart', figure=get_upcoming_ex_dividends(POLYGON_API))
+        ], style={'display': 'flex', 'justifyContent': 'center', 'alignItems': 'center', 'flexDirection': 'column', 'margin': 20})
     ),
 ])
 
@@ -138,8 +195,9 @@ def update_output(clear_clicks, find_clicks, date):
 
     # If the clear button was clicked, clear the charts and reset find button clicks
     if button_id == 'clear-button':
-        return [], 0
-
+        chart = get_upcoming_ex_dividends(POLYGON_API)
+        return [dcc.Graph(id='Upcoming_exDividend_chart', figure=chart)], 0
+        
     # If the find button was clicked, generate the graphs
     elif button_id == 'find-button':
         # If the find button has not been clicked, do not update the graphs
