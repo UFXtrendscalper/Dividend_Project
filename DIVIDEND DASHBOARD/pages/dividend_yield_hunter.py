@@ -2,7 +2,6 @@ import dash
 from dash import html, dcc, Input, Output, callback, dash_table, no_update, State
 from dash import callback_context
 import pandas as pd
-
 from datetime import date, timedelta, datetime, date
 from files.StockDataFetcher import StockDataFetcher
 import requests
@@ -113,16 +112,28 @@ def get_upcoming_ex_dividends(api_key):
     Returns:
     plotly.graph_objs._figure.Figure: A bar plot of the upcoming ex-dividend dates.
     """
-
     # Get today's date
     today = date.today()
-    # Calculate tomorrow's date
-    tomorrow = today + timedelta(days=1)
+    # Check if it's late in the month
+    if today.day > 29:
+        # Set the start date to the first of next month
+        start_date = today.replace(day=1, month=today.month % 12 + 1, year=today.year + (today.month // 12))
+    else:
+        # Otherwise, continue with tomorrow's date
+        start_date = today + timedelta(days=1)
+
+    # Set the end date to the end of the start date's month
+    end_of_month = start_date.replace(day=28) + timedelta(days=4)
+
+    # Format dates for API call
+    start_date_str = start_date.strftime('%Y-%m-%d')
+    end_of_month_str = end_of_month.strftime('%Y-%m-%d')
+
     # Calculate the end of the current month
     end_of_month = today.replace(day=28) + timedelta(days=4)
 
     # Define the API endpoint with parameters for the date range
-    api_url = f"https://api.polygon.io/v3/reference/dividends?ex_dividend_date.gt={tomorrow}&ex_dividend_date.lt={end_of_month}&limit=1000&apiKey={api_key}"
+    api_url = f"https://api.polygon.io/v3/reference/dividends?ex_dividend_date.gt={start_date_str}&ex_dividend_date.lt={end_of_month_str}&limit=1000&apiKey={api_key}"
 
     # Send GET request to the API
     response = requests.get(api_url)
@@ -131,23 +142,33 @@ def get_upcoming_ex_dividends(api_key):
 
     # Create a DataFrame from the API response
     df = pd.DataFrame(data['results'])
-    # Sort DataFrame by the ex-dividend date
-    df.sort_values(by=['ex_dividend_date'], inplace=True)
+    if df.empty:
+        print("No dividend data available for the given date range.")
+        # Handle the scenario, possibly by loading data for a different date range.
 
-    # Group by ex_dividend_date and count the number of stocks for each date
-    stocks_per_date = df.groupby(['ex_dividend_date']).size()
+    try:
+        # Sort DataFrame by the ex-dividend date
+        df.sort_values(by=['ex_dividend_date'], inplace=True)
 
-    # Get the current month's name for the plot title
-    current_month = datetime.now().strftime("%B")
+        # Group by ex_dividend_date and count the number of stocks for each date
+        stocks_per_date = df.groupby(['ex_dividend_date']).size()
 
-    # Create a bar plot with the grouped data
-    fig = px.bar(stocks_per_date, title=f'Upcoming Ex-Dividends for {current_month}')
-    # Update plot labels
-    fig.update_layout(xaxis_title='Ex-Dividend Date', yaxis_title='Number of Stocks', showlegend=False, width=1200, height=500, paper_bgcolor='#202123', plot_bgcolor='#202123', font=dict(color='white', size=12), font_size=14, font_family="Rockwell", title_font_family="Rockwell", title_font_size=24) 
-    # Customize hover data
-    fig.update_traces(hovertemplate='Ex-Dividend Date: %{x}<br>Number of Stocks: %{y}')
+        # Get the current month's name for the plot title
+        current_month = datetime.now().strftime("%B")
 
-    return fig
+        # Create a bar plot with the grouped data
+        fig = px.bar(stocks_per_date, title=f'Upcoming Ex-Dividends for {current_month}', width=1550, height=500)
+        # Update plot labels
+        fig.update_layout(xaxis_title='Ex-Dividend Date', yaxis_title='Number of Stocks', showlegend=False)
+        # Customize hover data
+        fig.update_traces(hovertemplate='Ex-Dividend Date: %{x}<br>Number of Stocks: %{y}')
+
+        # return the plot
+        return fig
+    except KeyError as e:
+        print(f"ex_dividend_date - Column not found in DataFrame: {e}")
+
+    
 
 #################### PAGE LAYOUT ####################
 layout = html.Div(children=[
