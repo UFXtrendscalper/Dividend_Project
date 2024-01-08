@@ -278,7 +278,7 @@ def create_table(ticker):
 #################### CONSTANTS ####################
 CRYPTO_TICKERS = ['BTC-USDC', 'ETH-USDC']
 MT4_SYMBOLS = ["USDCAD", "USDJPY", "USDCHF", "AUDUSD", "NZDUSD", "GBPUSD", "EURUSD", "OILUSe", "XAUUSD", "S&P500e"] 
-ETF_SYMBOLS = ['SPLG', 'GLD']
+ETF_SYMBOLS = ['SPLG', 'GLD', 'SH']
 TICKERS = load_and_combine_tickers(CRYPTO_TICKERS, MT4_SYMBOLS, ETF_SYMBOLS)
 TICKER_DICT = {'USDCAD':'USD/CAD', 'USDJPY':'USD/JPY', 'USDCHF':'USD/CHF', 'EURUSD':'EUR/USD', 'GBPUSD':'GBP/USD', 'AUDUSD':'AUD/USD', 'NZDUSD':'NZD/USD', 'OILUSe':'Crude Oil', 'XAUUSD':'Gold Futures', 'GLD':'Gold ETF', 'S&P500e':'S&P 500 Futures', 'SPLG':'S&P 500 ETF', 'BTC-USDC':'Bitcoin', 'ETH-USDC':'Ethereum'}
 TODAYS_DATE = date.today()
